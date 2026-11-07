@@ -1,0 +1,60 @@
+LumiLib
+Copyright 2026 Lukas
+
+This product includes software developed as part of the Fabric modding
+ecosystem for Minecraft.
+
+--------------------------------------------------------------------------
+Bundled font
+--------------------------------------------------------------------------
+
+  Geist Sans
+      Copyright (c) 2023 Vercel, Inc.
+      https://github.com/vercel/geist-font
+      Licensed under the SIL Open Font License, Version 1.1.
+      https://openfontlicense.org
+
+  Subset to the Latin character set and shipped in two weights
+  (Medium, SemiBold). The font files are unmodified apart from
+  subsetting, and are not sold on their own.
+
+--------------------------------------------------------------------------
+Bundled icons
+--------------------------------------------------------------------------
+
+  Lucide
+      Copyright (c) 2026 Lucide Icons and Contributors
+      https://lucide.dev
+      Licensed under the ISC License.
+
+  Three icons are used: "search", "pin" and "rotate-ccw" (shipped as
+  undo.png). They are rendered to PNG at a slightly heavier stroke
+  weight so they stay legible at GUI scale; the outlines themselves are
+  unchanged. The full licence text is in tools/lucide/LICENSE-Lucide.txt,
+  and the SVG sources are kept beside it.
+
+  Parts of Lucide derive from the Feather project,
+  Copyright (c) 2013-2023 Cole Bemis, MIT licensed.
+
+--------------------------------------------------------------------------
+Privacy
+--------------------------------------------------------------------------
+
+LumiLib reads the local Minecraft session only to display your account name,
+skin head and whether you are signed in with a Microsoft account. The session
+access token is never displayed, logged, stored or transmitted.
+
+LumiLib makes no network requests of its own.
+
+The account block can be turned off entirely in LumiLib's settings.
+
+--------------------------------------------------------------------------
+Acknowledgements
+--------------------------------------------------------------------------
+
+LumiLib is an independent implementation written against Minecraft 1.21.11.
+No source code from any other project was copied or adapted.
+
+The idea of a single hub screen for a set of mods, and of letting server
+owners switch client mod features off, is not original to this project;
+WalksyLib does the same. The implementation here is our own.

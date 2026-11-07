@@ -1,0 +1,69 @@
+package com.lumitier.DEINEMOD.client;
+
+import com.lumitier.lumilib.api.LumiLibApi;
+import com.lumitier.lumilib.api.LumiMod;
+import net.minecraft.util.Identifier;
+import net.minecraft.text.Text;
+
+/**
+ * Anmeldung bei LumiLib.
+ *
+ * WARUM EINE EIGENE KLASSE - das ist der wichtige Teil:
+ * LumiLib ist OPTIONAL. Stuende der Verweis darauf im Initialisierer der
+ * Mod, wuerde die Java-Laufzeit beim Start versuchen, LumiLibs Klassen
+ * aufzuloesen - und ohne LumiLib startet die Mod gar nicht mehr. Liegt
+ * der Verweis dagegen in einer eigenen Klasse, wird sie erst geladen,
+ * wenn jemand sie anfasst. Vorher wird abgefragt, ob LumiLib da ist.
+ *
+ * Dasselbe Muster wie LumiLibs eigene Bruecke zu Mod Menu.
+ *
+ * SO WIRD SIE AUFGERUFEN - im Client-Initialisierer der Mod:
+ *
+ *     if (FabricLoader.getInstance().isModLoaded("lumilib")) {
+ *         try {
+ *             LumiLibCompat.register();
+ *         } catch (Throwable t) {
+ *             LOGGER.warn("[DeineMod] LumiLib-Anmeldung fehlgeschlagen.", t);
+ *         }
+ *     }
+ *
+ * Der Fang um Throwable ist Absicht: LumiLib hat einen eigenen
+ * Versionsrhythmus. Aendert sich dort etwas, soll DEINE Mod weiterlaufen
+ * und nur nicht im Hub auftauchen.
+ *
+ * AUSSERDEM NOETIG - nur zwei Dinge:
+ * 1. In build.gradle eine Abhaengigkeit auf LumiLib
+ * 2. In fabric.mod.json unter "suggests" (NICHT "depends"):
+ *        "suggests": { "lumilib": "*" }
+ *    "depends" wuerde die Mod ohne LumiLib blockieren.
+ *
+ * ZUM ICON MUSST DU NICHTS TUN:
+ * LumiLib liest das Icon aus der INSTALLIERTEN Mod - dasselbe, das Mod
+ * Menu und Modrinth anzeigen. Es wird beim Zeichnen rund beschnitten,
+ * damit es sich in die Oberflaeche einfuegt. Ein eigenes Sprite ist nur
+ * noetig, wenn eine Mod im Hub bewusst ein ANDERES Bild zeigen will.
+ */
+public final class LumiLibCompat {
+
+	private LumiLibCompat() {}
+
+	public static void register() {
+		LumiLibApi.register(new LumiMod(
+			// Kennung - muss zur Mod-ID passen
+			"DEINEMOD",
+			// Angezeigter Name
+			Text.translatable("DEINEMOD.title"),
+			// Version - am besten aus dem Loader lesen, nicht fest eintragen
+			DeineMod.version(),
+			// Einzeiler fuer Karte und Mod-Seite
+			Text.translatable("DEINEMOD.summary"),
+			// Icon: null genuegt. LumiLib nimmt dann das Icon der
+			// installierten Mod. Nur fuer ein ABWEICHENDES Bild im Hub
+			// hier ein eigenes GUI-Sprite angeben.
+			null,
+			// Baut den Einstellungsbildschirm. null bedeutet: keine
+			// Einstellungen - der Hub zeigt dann einen Hinweis statt
+			// eines toten Knopfs.
+			DeineModScreen::create));
+	}
+}

@@ -1,0 +1,14 @@
+classTweaker v1 named
+
+# LumiLib - Zugriffserweiterung
+#
+# DrawContext sammelt alle GUI-Elemente in einem GuiRenderState. Das Feld
+# ist paketprivat, und ohne Zugriff darauf kann eine Mod kein eigenes
+# Element einreichen - also auch keinen eigenen Shader benutzen.
+#
+# Eine Zeile, ein Feld, nur lesend verwendet. Kein Mixin noetig.
+#
+# Die Kopfzeile MUSS die erste Zeile sein. Kommentare davor brechen den
+# Leser mit "Invalid access widener file header".
+
+accessible field net/minecraft/client/gui/DrawContext state Lnet/minecraft/client/gui/render/state/GuiRenderState;

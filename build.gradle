@@ -1,0 +1,133 @@
+plugins {
+	// Loom 1.19.3 verlangt Gradle >= 9.8.0 und baut mit Java 25.
+	// Der Mod-Code selbst bleibt auf Java-Level 21 (siehe unten).
+	id 'fabric-loom' version '1.19.3'
+	id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+loom {
+	// Oeffnet DrawContext.state - ohne das kann die Mod kein eigenes
+	// GUI-Element einreichen und damit keinen eigenen Shader benutzen.
+	accessWidenerPath = file("src/main/resources/lumilib.classtweaker")
+}
+
+repositories {
+	mavenCentral()
+	maven { url = 'https://maven.isxander.dev/releases' }
+	maven { url = 'https://maven.terraformersmc.com/releases/' }
+	exclusiveContent {
+		forRepository { maven { url = 'https://api.modrinth.com/maven' } }
+		filter { includeGroup 'maven.modrinth' }
+	}
+	maven { url = 'https://maven.quiltmc.org/repository/release' }
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	// Fabric API wird hier zur ECHTEN Abhaengigkeit, nicht nur zum Bauen:
+	// Keybind-Registrierung und spaeter das Netzwerkprotokoll brauchen sie.
+	// Das ist der Preis fuer den Hub und das Control-Protokoll - die
+	// einzelnen Mods kamen bisher ohne aus.
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+	compileOnly "io.github.llamalad7:mixinextras-common:0.5.5"
+	annotationProcessor "io.github.llamalad7:mixinextras-common:0.5.5"
+
+	// YACL wird gebraucht, weil LumiLib die Options-Bausteine bereitstellt.
+	modImplementation "maven.modrinth:yacl:pHWDw3Vc"
+	modImplementation "maven.modrinth:modmenu:cLkYaVuL"
+
+	// YACLs Laufzeit-Abhaengigkeit, mitgebuendelt. Ueber den Modrinth-Maven
+	// kommen diese transitiven Abhaengigkeiten NICHT mit; ohne sie stirbt der
+	// Start mit
+	//   NoClassDefFoundError: org/quiltmc/parsers/json/gson/GsonWriter
+	// Gilt fuer jedes Projekt, das YACL ueber Modrinth einbindet.
+	include(modImplementation("org.quiltmc.parsers:json:0.2.1"))
+	include(modImplementation("org.quiltmc.parsers:gson:0.2.1"))
+}
+
+processResources {
+	inputs.property "version", project.version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": project.version
+	}
+
+	// ALTLASTEN, die nicht mit ausgeliefert werden.
+	//
+	// Diese Dateien liegen noch im Quellbaum, werden aber von keiner Zeile
+	// Code mehr angefasst - nachgeprueft, nicht vermutet. Sie hier
+	// auszuschliessen statt sie zu loeschen hat einen Grund: Ein
+	// Ausschluss steht im Build und ist damit nachlesbar. Eine geloeschte
+	// Datei ist weg, und in einem halben Jahr fragt sich jemand, ob sie je
+	// da war.
+	//
+	// lumilib.accesswidener ist der wichtigste Posten: Angemeldet ist in
+	// der fabric.mod.json lumilib.classtweaker. Zwei Dateien derselben
+	// Art im Jar, von denen eine nirgends eingetragen ist, sieht nach
+	// einem Fehler aus, auch wenn sie nur herumliegt.
+	exclude "lumilib.accesswidener"
+	exclude "assets/lumilib/textures/gui/sprites/mod_lumilib.png"
+	exclude "assets/lumilib/textures/gui/sprites/mod_lumilib.png.mcmeta"
+	exclude "assets/lumilib/textures/gui/sprites/bevel_lg_dark.png"
+	exclude "assets/lumilib/textures/gui/sprites/bevel_lg_dark.png.mcmeta"
+	exclude "assets/lumilib/textures/gui/sprites/bevel_md_dark.png"
+	exclude "assets/lumilib/textures/gui/sprites/bevel_md_dark.png.mcmeta"
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 21
+}
+
+java {
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+	from("LICENSE") {
+		rename { "${it}_${project.archives_base_name}" }
+	}
+	from("NOTICE") {
+		rename { "${it}_${project.archives_base_name}" }
+	}
+}
+
+// ---------------------------------------------------------------------
+// VEROEFFENTLICHEN IN DEN LOKALEN MAVEN-ORDNER
+//
+// WOZU: Die anderen vier Mods muessen gegen LumiLib compilieren koennen.
+// Ohne das gibt es nur haessliche Wege - ein fester Pfad auf die Jar-Datei
+// im Nachbarordner, der bricht, sobald einer von beiden umzieht.
+//
+// So geht es stattdessen:
+//     1. hier:          gradlew publishToMavenLocal
+//     2. in der Mod:    mavenLocal() in repositories
+//                       modImplementation "com.lumitier.lumilib:lumilib:1.0.0"
+//
+// Veroeffentlicht wird die GEMAPPTE Jar (components.java enthaelt bei Loom
+// remapJar), also genau das, was auch ausgeliefert wird.
+//
+// Das Ziel ist ~/.m2/repository - ein Ordner auf dieser Maschine, kein
+// Server. Es geht nichts ins Netz.
+// ---------------------------------------------------------------------
+publishing {
+	publications {
+		create("mavenJava", MavenPublication) {
+			artifactId = project.archives_base_name
+			from components.java
+		}
+	}
+}

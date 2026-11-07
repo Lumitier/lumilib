@@ -1,0 +1,13 @@
+# Normalisierung: Git speichert Text intern mit LF.
+* text=auto eol=lf
+
+# Das Gradle-Wrapper-Skript ist ein Shell-Skript. Mit CRLF laeuft es unter
+# Linux und macOS nicht an ("bad interpreter").
+gradlew text eol=lf
+
+# Batch-Datei braucht Windows-Zeilenenden.
+*.bat text eol=crlf
+
+# Binaerdateien nie anfassen.
+*.png binary
+*.jar binary

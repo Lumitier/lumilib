@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "lumilib",
+  "version": "${version}",
+  "accessWidener": "lumilib.classtweaker",
+  "name": "LumiLib",
+  "description": "Shared foundation for Lumitier's client-side mods: a single hub screen for all of them, shared config and options building blocks, and an opt-in way for servers to switch features off.",
+  "authors": [
+    "Lumitier"
+  ],
+  "contact": {
+    "homepage": "https://modrinth.com/mod/lumilib",
+    "sources": "https://github.com/Lumitier/lumilib",
+    "issues": "https://github.com/Lumitier/lumilib/issues"
+  },
+  "license": "Apache-2.0",
+  "icon": "assets/lumilib/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.lumitier.lumilib.client.LumiLibClient"
+    ],
+    "modmenu": [
+      "com.lumitier.lumilib.client.ModMenuIntegration"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": "*",
+    "yet_another_config_lib_v3": "*"
+  }
+}
