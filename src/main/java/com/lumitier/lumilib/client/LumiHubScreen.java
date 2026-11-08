@@ -981,7 +981,9 @@ public class LumiHubScreen extends Screen {
 			}
 			pageOwner = mod.id();
 			pageRules = ServerRules.version();
-		} else if (pageRules != ServerRules.version()) {
+			pageRefresh = pageCache == null ? 0 : pageCache.refreshKey();
+		} else if (pageRules != ServerRules.version()
+				|| (pageCache != null && pageCache.refreshKey() != pageRefresh)) {
 			// Der Server hat neue Regeln geschickt, waehrend diese Seite
 			// offen ist. Neu bauen, damit Seiten, deren Inhalt davon
 			// abhaengt (LumiLibControl), sofort stimmen. Suche und
@@ -994,12 +996,16 @@ public class LumiHubScreen extends Screen {
 					+ mod.id() + ".", t);
 				pageCache = null;
 			}
+			pageRefresh = pageCache == null ? 0 : pageCache.refreshKey();
 		}
 		return pageCache;
 	}
 
 	/** Stand der Server-Regeln, mit dem pageCache gebaut wurde. */
 	private int pageRules = -1;
+
+	/** refreshKey() der Seite beim Bauen - siehe SettingsPage.refreshWhen. */
+	private int pageRefresh;
 
 	/** Was der Knopf auf der Mod-Seite tut. */
 	private enum ButtonAction { SETTINGS, MODRINTH }

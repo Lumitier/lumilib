@@ -58,12 +58,23 @@ public final class SettingsPage {
 	private final List<Section> sections;
 	private final @Nullable Runnable save;
 	private final Map<Row, Reset> resets;
+	private final @Nullable IntSupplier refresh;
 
 	private SettingsPage(List<Section> sections, @Nullable Runnable save,
-	                     Map<Row, Reset> resets) {
+	                     Map<Row, Reset> resets, @Nullable IntSupplier refresh) {
 		this.sections = List.copyOf(sections);
 		this.save = save;
 		this.resets = resets;
+		this.refresh = refresh;
+	}
+
+	/**
+	 * Stand, mit dem diese Seite gebaut wurde - oder 0 ohne refreshWhen.
+	 * Der Hub vergleicht ihn in jedem Bild mit dem aktuellen Wert und baut
+	 * die Seite neu, sobald er sich aendert. Seit LumiLib 1.3.2.
+	 */
+	public int refreshKey() {
+		return refresh == null ? 0 : refresh.getAsInt();
 	}
 
 	public List<Section> sections() {
@@ -268,6 +279,7 @@ public final class SettingsPage {
 		private Text currentTitle;
 		private List<Row> currentRows;
 		private Runnable save;
+		private IntSupplier refresh;
 
 		private Builder(String modId) {
 			this.modId = modId;
@@ -411,9 +423,24 @@ public final class SettingsPage {
 			return this;
 		}
 
+		/**
+		 * Seite neu bauen, sobald sich dieser Wert aendert.
+		 *
+		 * Fuer Seiten, deren AUFBAU vom Zustand abhaengt - etwa eine
+		 * Anmeldung, die von "Verbinden" ueber "Code eingeben" zu
+		 * "Verbunden als ..." wechselt. Schalter und Regler brauchen das
+		 * nicht, die lesen ihren Wert ohnehin in jedem Bild. Der Wert wird
+		 * in jedem Bild abgefragt: billig halten, am besten ein Zaehler.
+		 * Seit LumiLib 1.3.2.
+		 */
+		public Builder refreshWhen(IntSupplier version) {
+			this.refresh = version;
+			return this;
+		}
+
 		public SettingsPage build() {
 			flush();
-			return new SettingsPage(sections, save, resets);
+			return new SettingsPage(sections, save, resets, refresh);
 		}
 
 		private void flush() {
