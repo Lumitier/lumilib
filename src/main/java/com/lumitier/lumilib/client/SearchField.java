@@ -119,6 +119,21 @@ public final class SearchField {
 		if (!focused) {
 			return false;
 		}
+		// Strg+V: einfuegen an der Schreibmarke. Zeilenumbrueche und
+		// Steuerzeichen werden zu Leerzeichen, gekuerzt auf die Hoechstlaenge.
+		if (input.isPaste()) {
+			String clip = net.minecraft.client.MinecraftClient.getInstance().keyboard.getClipboard();
+			if (clip != null) {
+				String clean = clip.replaceAll("\\p{Cntrl}+", " ");
+				int room = 48 - text.length();
+				if (room > 0 && !clean.isEmpty()) {
+					String add = clean.substring(0, Math.min(room, clean.length()));
+					text.insert(cursor, add);
+					cursor += add.length();
+				}
+			}
+			return true;
+		}
 		int key = input.getKeycode();
 		switch (key) {
 			case GLFW.GLFW_KEY_BACKSPACE -> {

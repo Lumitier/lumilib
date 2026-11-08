@@ -314,14 +314,14 @@ public class LumiHubScreen extends ScaledScreen {
 		if (entry != null) {
 			drawModIcon(ctx, entry, x, mid - isz / 2, isz);
 		} else if (icon != null) {
-			Surface.icon(ctx, icon, x, mid - isz / 2, isz,
-				selected ? Theme.TEXT : Theme.TEXT_MUTED);
+			Surface.icon(ctx, icon, x, mid - isz / 2, isz, Theme.TEXT_MUTED);
 		}
 		// Fehlende Mods ausgegraut - sie sind anklickbar, aber sichtbar
 		// nicht dasselbe wie die laufenden.
-		int textColour = dimmed
-			? Theme.TEXT_FAINT
-			: (selected ? Theme.TEXT : Theme.TEXT_MUTED);
+		// Gewaehlte Zeile NICHT schwarz: Die helle Flaeche dahinter zeigt
+		// schon, was offen ist. Schwarz neben lauter Grau wirkte wie ein
+		// Fehler.
+		int textColour = dimmed ? Theme.TEXT_FAINT : Theme.TEXT_MUTED;
 
 		// Nur Mod-Zeilen lassen sich anpinnen. "All Mods" und der
 		// Aktualisierungs-Knopf sind Navigation, keine Mods.
