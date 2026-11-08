@@ -104,6 +104,15 @@ public final class LumiLibApi {
 		return com.lumitier.lumilib.client.ServerRules.controlled();
 	}
 
+	/**
+	 * Alle Regeln des aktuellen Servers: Mod-ID zu erlaubt. Leer ausserhalb
+	 * eines Servers mit dem Plugin. Fuer Verwaltungswerkzeuge wie
+	 * LumiLibControl - eine normale Mod braucht nur isDisabledByServer.
+	 */
+	public static java.util.Map<String, Boolean> serverRules() {
+		return com.lumitier.lumilib.client.ServerRules.rules();
+	}
+
 	/** Darf der Spieler auf diesem Server die Regeln aendern? */
 	public static boolean canControlServer() {
 		return com.lumitier.lumilib.client.ServerRules.admin();

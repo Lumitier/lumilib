@@ -980,9 +980,26 @@ public class LumiHubScreen extends Screen {
 				pageCache = null;
 			}
 			pageOwner = mod.id();
+			pageRules = ServerRules.version();
+		} else if (pageRules != ServerRules.version()) {
+			// Der Server hat neue Regeln geschickt, waehrend diese Seite
+			// offen ist. Neu bauen, damit Seiten, deren Inhalt davon
+			// abhaengt (LumiLibControl), sofort stimmen. Suche und
+			// Bildlauf bleiben - es ist dieselbe Seite, nur aktueller.
+			pageRules = ServerRules.version();
+			try {
+				pageCache = mod.mod().settings().get();
+			} catch (Throwable t) {
+				LumiLib.LOGGER.warn("[LumiLib] Could not rebuild the settings page for "
+					+ mod.id() + ".", t);
+				pageCache = null;
+			}
 		}
 		return pageCache;
 	}
+
+	/** Stand der Server-Regeln, mit dem pageCache gebaut wurde. */
+	private int pageRules = -1;
 
 	/** Was der Knopf auf der Mod-Seite tut. */
 	private enum ButtonAction { SETTINGS, MODRINTH }

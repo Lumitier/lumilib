@@ -24,6 +24,12 @@
       "com.lumitier.lumilib.client.ModMenuIntegration"
     ]
   },
+  "mixins": [
+    {
+      "config": "lumilib.mixins.json",
+      "environment": "client"
+    }
+  ],
   "depends": {
     "fabricloader": ">=0.20.1",
     "minecraft": "~1.21.11",

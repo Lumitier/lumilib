@@ -34,5 +34,6 @@
   "lumilib.server.disabled": "Disabled by this server. Your settings are kept and apply again when you leave.",
   "lumilib.server.toast.disabled": "Disabled on this server",
   "lumilib.server.toast.now_disabled": "Now disabled on this server",
-  "lumilib.server.toast.enabled": "Enabled again on this server"
+  "lumilib.server.toast.enabled": "Enabled again on this server",
+  "lumilib.server.toast.left": "Enabled again"
 }

@@ -140,6 +140,17 @@ public final class ServerRules {
 
 	private static final List<Runnable> LISTENERS = new CopyOnWriteArrayList<>();
 
+	/**
+	 * Zaehlt jede Aenderung. Der Hub baut daran erkennbar Seiten neu, deren
+	 * Inhalt von den Regeln abhaengt - ohne dafuer einen Zuhoerer zu
+	 * brauchen, der den Bildschirm ueberlebt.
+	 */
+	private static volatile int version;
+
+	public static int version() {
+		return version;
+	}
+
 	/** Laeuft auf diesem Server LumiLibControlPlugin? */
 	public static boolean controlled() {
 		return controlled;
@@ -201,7 +212,18 @@ public final class ServerRules {
 		// wird. Bei JOIN koennte die Antwort des Servers schon da sein und
 		// wuerde dann sofort wieder geloescht.
 		ClientPlayConnectionEvents.INIT.register((handler, client) -> reset());
-		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> reset());
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			// Beim Verlassen sind alle abgeschalteten Mods wieder an. Das
+			// soll man sehen - sonst stuenden oben noch die roten Karten
+			// "disabled", obwohl die Mods laengst wieder laufen. Die Karte
+			// derselben Mod wird dabei ersetzt, aus Rot wird Gruen.
+			Set<String> wasOff = disabled;
+			// Auf den Render-Thread: Die Karten sind nicht fuer mehrere
+			// Threads gebaut, und wo genau Fabric dieses Ereignis ruft,
+			// haengt davon ab, wie die Verbindung endet.
+			client.execute(() -> announceLeft(wasOff));
+			reset();
+		});
 	}
 
 	private static void reset() {
@@ -217,6 +239,7 @@ public final class ServerRules {
 		admin = isAdmin;
 		disabled = off;
 		rules = all;
+		version++;
 		for (Runnable r : LISTENERS) {
 			try {
 				r.run();
@@ -267,10 +290,22 @@ public final class ServerRules {
 		}
 	}
 
+	/** Nach dem Verlassen: "Enabled again" fuer jede Mod, die aus war. */
+	private static void announceLeft(Set<String> wasOff) {
+		if (wasOff.isEmpty()) {
+			return;
+		}
+		for (com.lumitier.lumilib.api.LumiMod mod : com.lumitier.lumilib.api.LumiLibApi.mods()) {
+			if (wasOff.contains(mod.id())) {
+				toast(mod.id(), mod.name().getString(),
+					net.minecraft.text.Text.translatable("lumilib.server.toast.left"), false);
+			}
+		}
+	}
+
 	private static void toast(String id, String name, net.minecraft.text.Text line, boolean warn) {
 		try {
-			net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
-			mc.getToastManager().add(new ServerToast(id, name, line, warn));
+			ServerToast.show(id, name, line, warn);
 		} catch (Throwable t) {
 			// Ein fehlender Hinweis ist kein Grund, das Spiel zu stoeren.
 			LumiLib.LOGGER.warn("[LumiLib] Could not show the server notice for " + id + ".", t);

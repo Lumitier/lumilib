@@ -34,5 +34,6 @@
   "lumilib.server.disabled": "Von diesem Server abgeschaltet. Deine Einstellungen bleiben erhalten und gelten wieder, sobald du ihn verlässt.",
   "lumilib.server.toast.disabled": "Auf diesem Server abgeschaltet",
   "lumilib.server.toast.now_disabled": "Jetzt auf diesem Server abgeschaltet",
-  "lumilib.server.toast.enabled": "Auf diesem Server wieder aktiv"
+  "lumilib.server.toast.enabled": "Auf diesem Server wieder aktiv",
+  "lumilib.server.toast.left": "Wieder aktiv"
 }
