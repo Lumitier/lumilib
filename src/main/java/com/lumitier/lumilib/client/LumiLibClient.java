@@ -41,20 +41,45 @@ public class LumiLibClient implements ClientModInitializer {
 		// Server das Plugin hat - dann kommt einfach nie ein Paket.
 		ServerRules.init();
 
+		// Knopf im Haupt- und Pausemenue.
+		MenuButtons.init();
+
 		openHub = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 			"key.lumilib.open_hub",
 			InputUtil.Type.KEYSYM,
 			GLFW.GLFW_KEY_L,
 			CATEGORY));
 
-		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+		// AM ANFANG DES TICKS, nicht am Ende.
+		//
+		// Vanilla legt die Fortschritte (Advancements) ebenfalls auf L. Seit
+		// 1.21.9 bekommen BEIDE Belegungen den Tastendruck, und Vanilla
+		// wertet seine Tasten mitten im Tick aus - also vor END_CLIENT_TICK.
+		// Dann war der Fortschritte-Bildschirm schon offen, und der Hub kam
+		// nicht mehr dran.
+		//
+		// Jetzt ist LumiLib zuerst dran und nimmt den anderen Belegungen
+		// auf derselben Taste den Druck weg. An den Einstellungen des
+		// Spielers aendert sich nichts - wer die Fortschritte auf L haben
+		// will, legt LumiLib auf eine andere Taste.
+		ClientTickEvents.START_CLIENT_TICK.register(client -> {
 			// while statt if: wurde die Taste in einem Tick mehrfach
 			// gedrueckt, leert die Schleife den Puffer sauber.
+			boolean open = false;
 			while (openHub.wasPressed()) {
-				if (client.currentScreen == null) {
-					client.setScreen(new LumiHubScreen(null));
+				open = true;
+			}
+			if (!open || client.currentScreen != null) {
+				return;
+			}
+			for (KeyBinding other : client.options.allKeys) {
+				if (other != openHub && other.equals(openHub)) {
+					while (other.wasPressed()) {
+						// nur leeren
+					}
 				}
 			}
+			client.setScreen(new LumiHubScreen(null));
 		});
 
 		// LumiLib meldet sich selbst an. Ohne das waere der Hub leer, solange
@@ -107,7 +132,10 @@ public class LumiLibClient implements ClientModInitializer {
 					v -> LumiLib.cfg.showSession = v, true)
 				.toggle("show_missing",
 					() -> LumiLib.cfg.showMissing,
-					v -> LumiLib.cfg.showMissing = v, true);
+					v -> LumiLib.cfg.showMissing = v, true)
+				.toggle("menu_button",
+					() -> LumiLib.cfg.menuButton,
+					v -> LumiLib.cfg.menuButton = v, true);
 
 		// Die Zeile entsteht gar nicht erst, wenn Mod Menu fehlt. Ein
 		// Knopf, der nichts tun kann, ist schlimmer als keiner.

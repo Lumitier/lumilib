@@ -60,6 +60,9 @@ public final class LumiLib {
 		 * Laden neu wuerfeln.
 		 */
 		public java.util.List<String> pinned = new java.util.ArrayList<>();
+
+		/** LumiLib-Knopf im Haupt- und Pausemenue. */
+		public boolean menuButton = true;
 	}
 
 	public static volatile Config cfg = new Config();

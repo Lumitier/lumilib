@@ -29,6 +29,8 @@
   "lumilib.group.tools": "Werkzeuge",
   "lumilib.option.show_missing": "Fehlende Mods zeigen",
   "lumilib.option.show_missing.desc": "Nicht installierte Mods auflisten, ausgegraut und mit Link. Aus, um nur zu sehen, was wirklich läuft.",
+  "lumilib.option.menu_button": "Menü-Knopf",
+  "lumilib.option.menu_button.desc": "Einen LumiLib-Knopf im Hauptmenü und im Pausemenü zeigen. Wirkt beim nächsten Öffnen des Menüs.",
   "lumilib.option.open_mod_menu": "Mod Menu öffnen",
   "lumilib.option.open_mod_menu.desc": "Alle Mods dieser Instanz, nicht nur diese.",
   "lumilib.server.disabled": "Von diesem Server abgeschaltet. Deine Einstellungen bleiben erhalten und gelten wieder, sobald du ihn verlässt.",

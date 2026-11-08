@@ -47,7 +47,7 @@ import java.util.UUID;
  * 5. Eingabesignaturen in 1.21.11: keyPressed(KeyInput),
  *    mouseClicked(Click, boolean).
  */
-public class LumiHubScreen extends Screen {
+public class LumiHubScreen extends ScaledScreen {
 
 	/** Wuerfel fuer Mods ohne eigenes Icon - GUI-Sprite, also ohne Pfad. */
 	private static final Identifier ICON_MOD_DEFAULT =
@@ -99,6 +99,9 @@ public class LumiHubScreen extends Screen {
 
 	@Override
 	protected void init() {
+		// ZUERST: legt width/height auf die eigene Groesse (siehe
+		// ScaledScreen). Alles darunter rechnet damit.
+		super.init();
 		this.pw = Math.max(280, (int) (this.width * Metrics.PANEL_W));
 		this.ph = Math.max(180, (int) (this.height * Metrics.PANEL_H));
 		this.px = (this.width - this.pw) / 2;
@@ -162,7 +165,7 @@ public class LumiHubScreen extends Screen {
 	// ------------------------------------------------------------------
 
 	@Override
-	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+	protected void renderScaled(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		// ZUERST, vor allem anderen: Der Bildschirm wird kopiert, solange
 		// nur die Welt darauf ist. Danach zeichnet der Hub darueber, und
 		// die Glasflaeche liest in dieser Kopie nach, was hinter ihr
@@ -199,8 +202,7 @@ public class LumiHubScreen extends Screen {
 
 		renderSidebar(ctx, mouseX, mouseY);
 		renderContent(ctx, mouseX, mouseY);
-
-		super.render(ctx, mouseX, mouseY, delta);
+		// Kein super.render - das erledigt ScaledScreen nach diesem Aufruf.
 	}
 
 	/**
@@ -1238,7 +1240,7 @@ public class LumiHubScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseClicked(Click click, boolean doubled) {
+	protected boolean scaledMouseClicked(Click click, boolean doubled) {
 		double mx = click.x();
 		double my = click.y();
 
@@ -1253,7 +1255,7 @@ public class LumiHubScreen extends Screen {
 			ColourPopup.close();
 			return true;
 		}
-		if (super.mouseClicked(click, doubled)) {
+		if (super.scaledMouseClicked(click, doubled)) {
 			return true;
 		}
 
@@ -1394,13 +1396,13 @@ public class LumiHubScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+	protected boolean scaledMouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
 		if (mouseX >= cx) {
 			int maxScroll = Math.max(0, contentHeight - (listBottom - listTop));
 			scroll = Math.max(0, Math.min(maxScroll, scroll - (int) (vertical * 18)));
 			return true;
 		}
-		return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
+		return super.scaledMouseScrolled(mouseX, mouseY, horizontal, vertical);
 	}
 
 	/**

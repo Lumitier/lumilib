@@ -29,6 +29,8 @@
   "lumilib.group.tools": "Tools",
   "lumilib.option.show_missing": "Show Missing Mods",
   "lumilib.option.show_missing.desc": "List mods that are not installed, greyed out and with a link. Turn it off to see only what is actually running.",
+  "lumilib.option.menu_button": "Menu Button",
+  "lumilib.option.menu_button.desc": "Show a LumiLib button in the title screen and the pause menu. Takes effect the next time the menu opens.",
   "lumilib.option.open_mod_menu": "Open Mod Menu",
   "lumilib.option.open_mod_menu.desc": "Every mod on this instance, not just these.",
   "lumilib.server.disabled": "Disabled by this server. Your settings are kept and apply again when you leave.",

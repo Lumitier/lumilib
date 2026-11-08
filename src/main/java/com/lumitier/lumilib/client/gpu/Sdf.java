@@ -147,6 +147,19 @@ public final class Sdf {
 		return clip;
 	}
 
+	/**
+	 * Das Schnittfenster in Minecrafts GUI-Pixeln.
+	 *
+	 * clip() wird in den Koordinaten gesetzt, in denen gezeichnet wird. Liegt
+	 * eine Skalierung darueber (ScaledScreen), muessen die beiden nicht
+	 * mehr uebereinstimmen - Minecrafts eigenes enableScissor rechnet die
+	 * Lage auch um. Ohne Skalierung ist das Ergebnis dasselbe wie vorher.
+	 */
+	static ScreenRect clipFor(org.joml.Matrix3x2fc pose) {
+		ScreenRect c = clip;
+		return c == null ? null : c.transform(pose);
+	}
+
 	/** True, wenn der Shaderweg benutzbar ist. */
 	public static boolean available() {
 		return pipeline(Style.PANEL) != null;
@@ -192,8 +205,12 @@ public final class Sdf {
 			ctx.state.addSimpleElement(new GlassState(p,
 				TextureSetup.of(Backdrop.view(),
 					RenderSystem.getSamplerCache().get(FilterMode.LINEAR)),
-				pose, x, y, w, h, radius, argb,
-				clip, new ScreenRect(x, y, w, h).transformEachVertex(pose)));
+				// KOPIE, nicht der Stapel selbst: Gezeichnet wird erst am
+				// Ende des Bildes, dann ist der Stapel laengst wieder
+				// zurueckgesetzt. Ohne Skalierung fiel das nie auf - mit
+				// ScaledScreen sass das Glas auf GUI 3 um 50 % daneben.
+				new org.joml.Matrix3x2f(pose), x, y, w, h, radius, argb,
+				clipFor(pose), new ScreenRect(x, y, w, h).transformEachVertex(pose)));
 			return true;
 		} catch (Throwable t) {
 			LumiLib.LOGGER.warn("[LumiLib] Glass surface failed.", t);
@@ -267,7 +284,7 @@ public final class Sdf {
 		var pose = ctx.getMatrices();
 		ctx.state.addSimpleElement(new RoundedRectState(
 			p, new org.joml.Matrix3x2f(pose), x, y, w, h, radius, argb,
-			clip, new ScreenRect(x, y, w, h).transformEachVertex(pose)));
+			clipFor(pose), new ScreenRect(x, y, w, h).transformEachVertex(pose)));
 		return true;
 	}
 
@@ -341,7 +358,7 @@ public final class Sdf {
 			TextureSetup.of(tex.getGlTextureView(),
 				RenderSystem.getSamplerCache().get(FilterMode.LINEAR)),
 			new org.joml.Matrix3x2f(pose), x, y, w, h, radius, argb,
-			clip, new ScreenRect(x, y, w, h).transformEachVertex(pose)));
+			clipFor(pose), new ScreenRect(x, y, w, h).transformEachVertex(pose)));
 		return true;
 	}
 }

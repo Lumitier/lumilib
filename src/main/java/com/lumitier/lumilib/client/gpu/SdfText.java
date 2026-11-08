@@ -181,7 +181,7 @@ public final class SdfText {
 				RenderSystem.getSamplerCache().get(FilterMode.LINEAR)),
 			new org.joml.Matrix3x2f(pose),
 			// Schnittfenster mitgeben - siehe Sdf.clip.
-			used, argb, Sdf.clip(), box.transformEachVertex(pose)));
+			used, argb, Sdf.clipFor(pose), box.transformEachVertex(pose)));
 		return true;
 	}
 }
