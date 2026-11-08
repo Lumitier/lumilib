@@ -37,6 +37,10 @@ public class LumiLibClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		LumiLib.load();
 
+		// Empfang fuer LumiLibControlPlugin. Kostet nichts, solange kein
+		// Server das Plugin hat - dann kommt einfach nie ein Paket.
+		ServerRules.init();
+
 		openHub = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 			"key.lumilib.open_hub",
 			InputUtil.Type.KEYSYM,

@@ -787,6 +787,20 @@ public class LumiHubScreen extends Screen {
 		// ein Platzhalter: Man verlaesst den Hub, sieht eine fremde
 		// Oberflaeche und muss sich zurueckdruecken. Bringt die Mod eine
 		// SettingsPage mit, steht alles hier.
+
+		// Vom Server abgeschaltet: oben eine rote Zeile, darunter die
+		// Einstellungen wie immer. Die bleiben bedienbar - sie gelten
+		// wieder, sobald man den Server verlaesst, und genau das sagt der
+		// Text. Bei jedem Bild gelesen: Schickt der Server neue Regeln,
+		// waehrend der Hub offen ist, stimmt die Zeile sofort.
+		if (ServerRules.disabled(mod.id())) {
+			String line = Ui.fit(this.textRenderer,
+				Text.translatable("lumilib.server.disabled").getString(), w);
+			Ui.drawTop(ctx, this.textRenderer, Ui.text(line),
+				x, y + 3, Ui.TOP_BODY, Theme.WARN);
+			y += 3 + Ui.advance(Ui.BODY_H, Ui.BODY_D, 6);
+		}
+
 		SettingsPage page = settingsPage(mod);
 		if (page != null) {
 			// Lage MERKEN statt beim Klick neu ausrechnen. Genau diese

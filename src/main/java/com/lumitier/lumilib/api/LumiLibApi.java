@@ -76,4 +76,45 @@ public final class LumiLibApi {
 	public static synchronized boolean isRegistered(String id) {
 		return MODS.containsKey(id);
 	}
+
+	// ------------------------------------------------------------------
+	// Server-Regeln (LumiLibControlPlugin)
+	//
+	// Ein Server mit dem Plugin kann einzelne Mods fuer die Dauer der
+	// Verbindung abschalten. Die Einstellungen des Nutzers bleiben dabei
+	// unangetastet - die Mod soll nur so lange so tun, als waere sie aus.
+	// Ohne das Plugin auf dem Server liefert alles hier "erlaubt".
+	//
+	// Seit LumiLib 1.3.0. Eine Mod, die das benutzt, muss darauf achten,
+	// dass LumiLib optional ist: Aufrufe nur hinter einem
+	// FabricLoader.isModLoaded("lumilib").
+	// ------------------------------------------------------------------
+
+	/**
+	 * Hat der aktuelle Server diese Mod abgeschaltet?
+	 *
+	 * Billig genug fuer jedes Bild. Ausserhalb eines Servers immer false.
+	 */
+	public static boolean isDisabledByServer(String modId) {
+		return com.lumitier.lumilib.client.ServerRules.disabled(modId);
+	}
+
+	/** Laeuft auf dem aktuellen Server LumiLibControlPlugin? */
+	public static boolean isServerControlled() {
+		return com.lumitier.lumilib.client.ServerRules.controlled();
+	}
+
+	/** Darf der Spieler auf diesem Server die Regeln aendern? */
+	public static boolean canControlServer() {
+		return com.lumitier.lumilib.client.ServerRules.admin();
+	}
+
+	/**
+	 * Wird aufgerufen, sobald sich die Regeln aendern: neue Regeln vom
+	 * Server, Betreten eines Servers, Verlassen. Laeuft auf dem
+	 * Render-Thread.
+	 */
+	public static void onServerRulesChanged(Runnable listener) {
+		com.lumitier.lumilib.client.ServerRules.onChanged(listener);
+	}
 }

@@ -30,5 +30,9 @@
   "lumilib.option.show_missing": "Fehlende Mods zeigen",
   "lumilib.option.show_missing.desc": "Nicht installierte Mods auflisten, ausgegraut und mit Link. Aus, um nur zu sehen, was wirklich läuft.",
   "lumilib.option.open_mod_menu": "Mod Menu öffnen",
-  "lumilib.option.open_mod_menu.desc": "Alle Mods dieser Instanz, nicht nur diese."
+  "lumilib.option.open_mod_menu.desc": "Alle Mods dieser Instanz, nicht nur diese.",
+  "lumilib.server.disabled": "Von diesem Server abgeschaltet. Deine Einstellungen bleiben erhalten und gelten wieder, sobald du ihn verlässt.",
+  "lumilib.server.toast.disabled": "Auf diesem Server abgeschaltet",
+  "lumilib.server.toast.now_disabled": "Jetzt auf diesem Server abgeschaltet",
+  "lumilib.server.toast.enabled": "Auf diesem Server wieder aktiv"
 }
