@@ -2,7 +2,7 @@
   "lumilib.title": "LumiLib",
   "lumilib.summary": "Shared foundation and hub for Lumitier's mods.",
   "key.lumilib.open_hub": "Open LumiLib",
-  "key.categories.lumilib.main": "LumiLib",
+  "key.category.lumilib.main": "LumiLib",
   "lumilib.hub.title": "LumiLib",
   "lumilib.content.all_mods": "All Mods",
   "lumilib.sidebar.empty": "No mods registered yet.",
