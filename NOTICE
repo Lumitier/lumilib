@@ -27,11 +27,19 @@ Bundled icons
       https://lucide.dev
       Licensed under the ISC License.
 
-  Three icons are used: "search", "pin" and "rotate-ccw" (shipped as
-  undo.png). They are rendered to PNG at a slightly heavier stroke
-  weight so they stay legible at GUI scale; the outlines themselves are
-  unchanged. The full licence text is in tools/lucide/LICENSE-Lucide.txt,
-  and the SVG sources are kept beside it.
+  In the interface, three icons are used: "search", "pin" and
+  "rotate-ccw" (shipped as undo.png). They are rendered to PNG at a
+  slightly heavier stroke weight so they stay legible at GUI scale; the
+  outlines themselves are unchanged.
+
+  The mod icon (icon.png) is "layout-grid". The hub icons in
+  textures/mod_catalog are "sparkles" (Experience Orb Tweaks),
+  "package-open" (Item Drop Tweaks), "snowflake" (Perpetual Snow) and
+  "moon-star" (Shadow Tweaks). Each is placed on a rounded background;
+  the outlines are unchanged.
+
+  The full licence text is in tools/lucide/LICENSE-Lucide.txt, and the
+  SVG sources of the interface icons are kept beside it.
 
   Parts of Lucide derive from the Feather project,
   Copyright (c) 2013-2023 Cole Bemis, MIT licensed.
