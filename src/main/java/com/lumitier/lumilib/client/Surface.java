@@ -5,6 +5,7 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.util.Identifier;
 
 import com.lumitier.lumilib.client.gpu.Sdf;
+import com.lumitier.lumilib.client.gpu.SdfIcons;
 
 import static com.lumitier.lumilib.LumiLib.MOD_ID;
 
@@ -229,7 +230,23 @@ public final class Surface {
 	 * werden also als Ganzes skaliert - bei einem Symbol ist genau das
 	 * richtig, ein gekachelter Rand waere Unsinn.
 	 */
+	/**
+	 * Ein kleines Zeichen.
+	 *
+	 * Erst wird im Abstandsfeld-Atlas nachgesehen - dort liegen die
+	 * Lucide-Zeichen, und daraus wird die Kante in der Zielgroesse
+	 * gerechnet. Nur was dort fehlt (Mod-Icons, Platzhalter), geht noch
+	 * als Sprite durch.
+	 *
+	 * Der Name im Atlas ist der Pfad der Kennung: aus
+	 * lumilib:search wird "search". Damit mussten die Aufrufstellen
+	 * nicht angefasst werden.
+	 */
 	public static void icon(DrawContext ctx, Identifier id, int x, int y, int size, int argb) {
+		if (id.getNamespace().equals(MOD_ID)
+			&& SdfIcons.draw(ctx, id.getPath(), x, y, size, argb)) {
+			return;
+		}
 		sprite(ctx, id, x, y, size, size, argb);
 	}
 

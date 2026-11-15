@@ -38,7 +38,34 @@ public final class Metrics {
 
 	// --- Sidebar -------------------------------------------------------
 	public static final int ROW_H       = 21;
-	public static final int ROW_ICON    = 13;
+	/**
+	 * Kantenlaenge des Mod-Icons in der Sidebar.
+	 *
+	 * 11 und nicht 13, und das ist eine Messung, keine Meinung: Die
+	 * Versalien daneben sind 9 Pixel hoch. Eine 13 Pixel hohe GEFUELLTE
+	 * Kachel ragt damit oben wie unten ueber die Schrift hinaus. Sie sitzt
+	 * dann zwar rechnerisch mittig - nachgerechnet 0,08 Pixel Rest -, liest
+	 * sich aber trotzdem als zu hoch, weil das Auge die Masse der Flaeche
+	 * gegen die Buchstaben misst und nicht die Mittellinien.
+	 *
+	 * Bei einem Strichzeichen waere 13 richtig: dort ist kaum Flaeche, nur
+	 * Kontur. Diese Icons sind aber gefuellt.
+	 *
+	 * UND WARUM 12 UND NICHT 11:
+	 * Weil eine Kachel auf einem GANZEN Pixel sitzen muss. Die optische
+	 * Mitte der Beschriftung liegt bei 11,03 (siehe Ui.opticalCentreOf).
+	 * Nachgerechnet, welche Kachelhoehe wie nah herankommt:
+	 *
+	 *     10 px -> oben 6, Mitte 11,00, Rest -0,03
+	 *     11 px -> oben 6, Mitte 11,50, Rest +0,47
+	 *     12 px -> oben 5, Mitte 11,00, Rest -0,03
+	 *     13 px -> oben 5, Mitte 11,50, Rest +0,47
+	 *
+	 * Mit UNGERADER Kantenlaenge ist die Mitte ein halber Pixel, mit
+	 * gerader ein ganzer - und nur die geraden treffen. Bei 11 war die
+	 * Kachel also nicht schlecht gesetzt, sie KONNTE nicht sitzen.
+	 */
+	public static final int ROW_ICON    = 12;
 	/** Abstand zwischen Icon und Beschriftung. */
 	public static final int ROW_ICON_GAP = 7;
 	/** Kopfzeile eines Abschnitts ("MODS"). */

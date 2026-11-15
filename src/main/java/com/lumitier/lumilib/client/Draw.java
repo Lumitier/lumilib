@@ -1,16 +1,28 @@
 package com.lumitier.lumilib.client;
 
+import com.lumitier.lumilib.client.gpu.Sdf;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 
 /**
  * Zeichenhelfer, die Vanilla nicht mitbringt.
  *
- * Minecraft kennt nur rechteckige Fuellungen. Abgerundete Ecken entstehen
- * hier, indem jede Zeile des Rechtecks einzeln gezeichnet und an den Ecken
- * um den passenden Betrag eingerueckt wird. Bei Radien um 8 Pixel sind das
- * eine Handvoll zusaetzlicher Fuellaufrufe pro Flaeche - vernachlaessigbar,
- * und es braucht keine einzige Textur.
+ * WIE RUNDE ECKEN HIER ENTSTEHEN - zwei Wege, in dieser Reihenfolge:
+ *
+ * 1. Auf der Grafikkarte, ueber Sdf mit Style.FLAT. Die Kante wird dort
+ *    aus dem Abstand zur Form berechnet und ueber die Breite eines
+ *    Bildpunkts ausgeblendet. Dadurch ist sie bei jeder Groesse und
+ *    jeder GUI-Skalierung gleich weich.
+ *
+ * 2. Schlaegt das fehl - kein Shader, zu hohe Flaeche -, zeilenweise mit
+ *    Fuellrechtecken, eingerueckt nach Kreisgleichung.
+ *
+ * WARUM NICHT GLEICH SO:
+ * Weg 2 war lange der einzige. Er zeichnet die Rundung in GANZEN
+ * Bildpunkten, also als Treppe. Bei einer 52 Pixel hohen Karte mit Radius
+ * 10 faellt das kaum auf; bei einem 10 Pixel hohen Schalter oder einem
+ * Statuspunkt mit Radius 3 ist die Treppe die Form. Genau diese kleinen
+ * Elemente sahen gepixelt aus, nicht die grossen Flaechen.
  */
 public final class Draw {
 
@@ -26,7 +38,15 @@ public final class Draw {
 			ctx.fill(x, y, x + w, y + h, argb);
 			return;
 		}
+		if (Sdf.roundedRect(ctx, Sdf.Style.FLAT, x, y, w, h, r, argb)) {
+			return;
+		}
+		scanlineRect(ctx, x, y, w, h, r, argb);
+	}
 
+	/** Weg 2: zeilenweise, in ganzen Bildpunkten. */
+	private static void scanlineRect(DrawContext ctx, int x, int y, int w, int h,
+	                                 int r, int argb) {
 		// Mittelblock in voller Breite, oben und unten um den Radius verkuerzt.
 		ctx.fill(x, y + r, x + w, y + h - r, argb);
 
@@ -80,8 +100,20 @@ public final class Draw {
 		ctx.fill(x, y, x + 1, y + h, argb);
 	}
 
-	/** Kleiner gefuellter Kreis, fuer Statuspunkte. */
+	/**
+	 * Kleiner gefuellter Kreis, fuer Statuspunkte.
+	 *
+	 * Ein Kreis ist ein Quadrat, dessen Radius seine halbe Kante ist -
+	 * also dieselbe Abstandsfunktion, kein eigener Fall im Shader.
+	 */
 	public static void dot(DrawContext ctx, int cx, int cy, int radius, int argb) {
+		if (radius <= 0) {
+			return;
+		}
+		int d = radius * 2;
+		if (Sdf.roundedRect(ctx, Sdf.Style.FLAT, cx - radius, cy - radius, d, d, radius, argb)) {
+			return;
+		}
 		for (int dy = -radius; dy <= radius; dy++) {
 			int dx = (int) Math.floor(Math.sqrt(radius * radius - dy * dy) + 0.5);
 			ctx.fill(cx - dx, cy + dy, cx + dx, cy + dy + 1, argb);

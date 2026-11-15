@@ -44,6 +44,22 @@ public final class SdfText {
 	private static SdfFont bold;
 	private static boolean fontsTried;
 
+	/**
+	 * Dieselbe Pipeline fuer die Icons.
+	 *
+	 * Sie liest ein Abstandsfeld aus einer Textur und rechnet daraus die
+	 * Kante - ob darin Buchstaben oder Lucide-Zeichen liegen, ist ihr
+	 * gleich. Die Reichweite des Feldes steckt als Konstante im Shader,
+	 * deshalb MUSS der Erzeuger der Icons denselben spread benutzen wie
+	 * der der Schrift; das steht in tools/sdf_icons.py.
+	 *
+	 * Eine zweite Pipeline waere ein zweiter Shader-Aufbau, ein zweiter
+	 * Fehlerfall und ein Wechsel der Pipeline mitten im Bild.
+	 */
+	static RenderPipeline sharedPipeline() {
+		return pipeline();
+	}
+
 	private static RenderPipeline pipeline() {
 		if (pipeline != null || broken) {
 			return pipeline;

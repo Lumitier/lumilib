@@ -1,0 +1,20 @@
+{
+  "ui.pad_loop": {
+    "sounds": [
+      {
+        "name": "lumilib:ui/pad_loop",
+        "stream": true
+      }
+    ]
+  },
+  "ui.open": {
+    "sounds": [
+      "lumilib:ui/open"
+    ]
+  },
+  "ui.close": {
+    "sounds": [
+      "lumilib:ui/close"
+    ]
+  }
+}

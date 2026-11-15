@@ -55,6 +55,20 @@ public class LumiHubScreen extends ScaledScreen {
 
 	private final Screen parent;
 
+	/**
+	 * Ob der Oeffnungsklang fuer dieses Fenster schon gelaufen ist.
+	 *
+	 * Noetig, weil init() nicht nur beim Oeffnen laeuft, sondern auch
+	 * bei JEDER Groessenaenderung des Spielfensters. Ohne diese Sperre
+	 * ertoent der Klang beim Ziehen am Fensterrand im Dauerfeuer.
+	 *
+	 * Am Objekt und nicht statisch: Wer auf die Einstellungsseite einer
+	 * Mod wechselt und zurueckkommt, landet auf DEMSELBEN Objekt - der
+	 * Klang soll dabei nicht noch einmal kommen. Ein neuer Hub dagegen
+	 * ist ein neues Objekt und bekommt seinen Klang.
+	 */
+	private boolean greeted;
+
 	/** Fenster. */
 	private int px, py, pw, ph;
 	/** Sidebar-Karte. */
@@ -107,6 +121,18 @@ public class LumiHubScreen extends ScaledScreen {
 		this.px = (this.width - this.pw) / 2;
 		this.py = (this.height - this.ph) / 2;
 
+		// Idempotent: init laeuft auch bei jeder Groessenaenderung, start
+		// fragt vorher den Soundmanager.
+		HubSound.start();
+
+		// Der Einzelklang ist NICHT idempotent, deshalb die Sperre. Er
+		// laeuft gleichzeitig mit dem Start der Flaeche, nicht davor:
+		// Seine zwei Sekunden verdecken deren Einblendung.
+		if (!this.greeted) {
+			this.greeted = true;
+			HubSound.playOpen();
+		}
+
 		int pad = Metrics.PAD;
 		this.sw = Math.max(110, (int) (this.pw * Metrics.SIDEBAR_W));
 		this.sx = this.px + pad;
@@ -139,9 +165,28 @@ public class LumiHubScreen extends ScaledScreen {
 
 	@Override
 	public void close() {
+		// Hier und nicht in removed(): removed() laeuft auch, wenn man
+		// auf die Einstellungsseite einer Mod wechselt, und dort waere
+		// ein Schliessklang falsch - geschlossen wird ja nichts. close()
+		// ist der Weg nach draussen, ueber Escape oder den Zurueckknopf.
+		HubSound.playClose();
 		if (this.client != null) {
 			this.client.setScreen(this.parent);
 		}
+	}
+
+	/**
+	 * Bildschirm wird abgeloest - Hintergrundton aus.
+	 *
+	 * HIER UND NICHT IN close(): close laeuft nur beim Schliessen mit
+	 * Escape. Wer von hier aus Mod Menu oeffnet oder ins Spiel
+	 * zurueckkehrt, geht an close vorbei - und der Ton liefe weiter,
+	 * ohne dass noch ein Fenster da waere, das ihn erklaert.
+	 */
+	@Override
+	public void removed() {
+		HubSound.stop();
+		super.removed();
 	}
 
 	private List<HubEntry> filtered() {
@@ -308,13 +353,51 @@ public class LumiHubScreen extends ScaledScreen {
 		} else if (hover) {
 			Surface.row(ctx, x - 4, y, w + 8, Metrics.ROW_H, Theme.ROW_HOVER);
 		}
-		// Symbol UND Beschriftung auf dieselbe Mittellinie der Zeile.
+		// Symbol auf die SICHTBARE Mitte der Beschriftung, nicht auf die
+		// Mitte der Zeile.
 		int mid = y + Metrics.ROW_H / 2;
 		int isz = Metrics.ROW_ICON;
-		if (entry != null) {
-			drawModIcon(ctx, entry, x, mid - isz / 2, isz);
-		} else if (icon != null) {
-			Surface.icon(ctx, icon, x, mid - isz / 2, isz, Theme.TEXT_MUTED);
+
+		// REIHENFOLGE: erst der Text, dann das Symbol darauf.
+		//
+		// Der Text bekommt die Mitte der Zeile, gemessen am Versalblock -
+		// das ist die Schreiblinie, die ALLE Zeilen der Liste teilen.
+		// Das Symbol richtet sich danach, nicht umgekehrt.
+		int lineY = header
+			? mid
+			: Ui.lineCentreIn(y, Metrics.ROW_H, Ui.BODY_H, Ui.BODY_D,
+				Ui.TOP_BODY, boldLabel);
+
+		// Die Kachel auf die Mitte des VERSALBLOCKS - dann ragt sie oben
+		// und unten gleich weit ueber den Text hinaus. Ungleiche
+		// Ueberstaende sind das, was man als "sitzt zu hoch" oder "zu
+		// tief" liest.
+		//
+		// UND ZWAR MIT HALBEM PIXEL:
+		// Die richtige Stelle liegt bei 12,5 Pixeln Schrift auf einem
+		// halben Pixel. Ein ganzzahliges Runden hiesse hier, genau diesen
+		// halben Pixel danebenzuliegen - zu beiden Seiten gleich weit,
+		// deshalb half auch jedes Verschieben um eins nichts, es kippte
+		// nur die Richtung. Der Rest wird darum ueber die Matrix
+		// geschoben. Der Kasten wird ohnehin kantengeglaettet gezeichnet,
+		// das kostet also keine Schaerfe, die es vorher gab.
+		float iconYf = header
+			? mid - isz / 2.0F
+			: Ui.capBlockCentreOf(lineY, Ui.BODY_H, Ui.BODY_D,
+				Ui.TOP_BODY, boldLabel) - isz / 2.0F;
+		int iconY = (int) Math.floor(iconYf);
+		float iconFrac = iconYf - iconY;
+
+		if (entry != null || icon != null) {
+			var pose = ctx.getMatrices();
+			pose.pushMatrix();
+			pose.translate(0.0F, iconFrac);
+			if (entry != null) {
+				drawModIcon(ctx, entry, x, iconY, isz);
+			} else {
+				Surface.icon(ctx, icon, x, iconY, isz, Theme.TEXT_MUTED);
+			}
+			pose.popMatrix();
 		}
 		// Fehlende Mods ausgegraut - sie sind anklickbar, aber sichtbar
 		// nicht dasselbe wie die laufenden.
@@ -350,7 +433,7 @@ public class LumiHubScreen extends ScaledScreen {
 			Ui.drawCenteredIn(ctx, this.textRenderer, drawn, tx,
 				y, Metrics.ROW_H, Ui.BODY_H, Ui.BODY_D, Ui.TOP_BODY, textColour);
 		} else {
-			Ui.drawCenteredLine(ctx, this.textRenderer, drawn, tx, mid,
+			Ui.drawCenteredLine(ctx, this.textRenderer, drawn, tx, lineY,
 				Ui.BODY_H, Ui.BODY_D, Ui.TOP_BODY, textColour);
 		}
 
@@ -471,9 +554,11 @@ public class LumiHubScreen extends ScaledScreen {
 		if (updates > 0) {
 			// Punkt rechts aussen statt eines Pfeils - ein Pfeil sieht nach
 			// Aufklappen aus, hier wird aber ein anderer Bildschirm geoeffnet.
-			int dot = 4;
-			Surface.icon(ctx, Identifier.of(LumiLib.MOD_ID, "dot_fill"),
-				x + w - dot, y + 3 + Ui.BODY_H / 2 - dot / 2, dot, Theme.OK);
+			// Gerechnet statt als Bild: Draw.dot geht ueber dieselbe
+			// Abstandsfunktion wie die Flaechen. Ein 4 Pixel grosses PNG
+			// war bei GUI-Skalierung 3 ein Quadrat mit abgeschnittenen
+			// Ecken, kein Punkt.
+			Draw.dot(ctx, x + w - 2, y + 3 + Ui.BODY_H / 2, 2, Theme.OK);
 		}
 
 		y += Metrics.ROW_H + 4;

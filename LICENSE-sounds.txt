@@ -1,0 +1,65 @@
+Klaenge in LumiLib
+==================
+
+Beide Klaenge stehen unter CC BY. Die Namensnennung ist Bedingung der
+Lizenz und darf nicht entfernt werden - auch nicht aus der Beschreibung
+auf Modrinth.
+
+
+assets/lumilib/sounds/ui/pad_loop.ogg
+-------------------------------------
+Die Hintergrundflaeche im Hub.
+
+    ambient_loop_A_001b.wav by VectorSpace
+    https://freesound.org/s/496506/
+    License: Attribution 3.0 (CC BY 3.0)
+    https://creativecommons.org/licenses/by/3.0/
+
+Bearbeitet gegenueber dem Original - das erlaubt CC BY ausdruecklich:
+  - Naht geschlossen. Die Datei ging trotz "loop" im Namen nicht
+    sauber im Kreis auf: Der Sprung zwischen letztem und erstem
+    Abtastwert war 0,068, der groesste gewoehnliche Schritt innerhalb
+    der Datei nur 0,010. Das haette bei jeder Wiederholung geknackt.
+    Behoben durch Ueberblendung von drei Sekunden; die Datei ist
+    dadurch 29 statt 32 Sekunden lang.
+  - Unterhalb von 90 Hz um 12 dB abgesenkt. Die Aufnahme steht in C
+    mit der Wurzel auf C2 bei 65 Hz, und dort lagen 72 Prozent der
+    Leistung. Auf Notebooklautsprechern ist das nicht wiederzugeben
+    und frisst nur die Aussteuerung weg.
+  - Auf Spitze 0,17 gemischt, von urspruenglich 0,31.
+  - Nach Ogg Vorbis gewandelt.
+
+Die Bearbeitung macht tools/pad_fit.py nachvollziehbar.
+
+
+assets/lumilib/sounds/ui/open.ogg
+assets/lumilib/sounds/ui/close.ogg
+----------------------------------
+Oeffnen und Schliessen des Hubs. BEIDE stammen aus derselben Aufnahme.
+
+    Magical UI Selection Stinger - Mysterious Fantasy Game SFX
+    by TommasoMotteran
+    https://freesound.org/s/875968/
+    License: Attribution 4.0 (CC BY 4.0)
+    https://creativecommons.org/licenses/by/4.0/
+
+Bearbeitet:
+  - open.ogg: nur auf Spitze 0,40 gemischt und nach Ogg Vorbis
+    gewandelt. KEIN Umstimmen noetig - nachgemessen steht die
+    Aufnahme bereits in C (staerkster Ton 262,4 Hz = C4, darueber
+    C5 bei 531 Hz, dazu F3, F4, D3, D4, E4), und die Flaeche oben
+    ebenfalls. Glueck, aber nachgeprueft.
+  - close.ogg: dieselbe Aufnahme eine Oktave tiefer, dadurch auf
+    130,9 Hz (C3), und auf 2,2 Sekunden gekuerzt. Dasselbe Verhaeltnis
+    verwendet OneConfig fuer seine beiden Klaenge - deren open liegt
+    auf G#4, deren close auf G#3.
+
+Die Bearbeitung macht tools/fit_sting.py nachvollziehbar.
+
+
+Gerechnete Rueckfallloesungen
+-----------------------------
+tools/pad_loop.py erzeugt eine gerechnete Flaeche, tools/sting.py
+gerechnete Einzelklaenge. Beide bleiben im Projekt, falls die
+Lizenzfrage je anders beantwortet werden muss. Sie enthalten keine
+fremden Rechte.

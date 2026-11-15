@@ -164,6 +164,34 @@ public final class SdfFont {
 	/** Unterlaenge bei dieser Groesse. */
 	public float descent(float px) { return data.descent * scale(px); }
 
+	/**
+	 * x-Hoehe bei dieser Groesse - Oberkante des x bis Schreiblinie.
+	 *
+	 * WOZU DAS GEBRAUCHT WIRD:
+	 * Ein Wort wie "LumiLib" besteht fast nur aus Kleinbuchstaben. Seine
+	 * sichtbare Masse liegt deshalb im x-Band, nicht im Versalblock -
+	 * und ein Symbol daneben, das auf die Mitte des Versalblocks gesetzt
+	 * wird, steht sichtbar zu hoch. Gemessen bei 12,5 Pixeln: Versalhoehe
+	 * 8,85, x-Hoehe 6,65, Mitten 1,10 Pixel auseinander.
+	 *
+	 * Gemessen am x selbst, nicht aus der Versalhoehe geschaetzt: Das
+	 * Verhaeltnis der beiden ist bei jedem Schnitt anders.
+	 */
+	public float xHeight(float px) {
+		Glyph x = byChar.get('x');
+		if (x == null) {
+			// Ohne x keine Messung - dann lieber die Versalhoehe, also
+			// kein Versatz statt eines geratenen.
+			return capHeight(px);
+		}
+		// Der Kasten im Atlas traegt ringsum den Rand des Abstandsfeldes.
+		// Oben und unten also zweimal abziehen, dann bleibt die Tinte -
+		// und das x steht auf der Schreiblinie, seine Tintenhoehe IST die
+		// x-Hoehe.
+		float p = data.pad > 0 ? data.pad : data.spread + 2.0F;
+		return (x.h - 2.0F * p) * scale(px);
+	}
+
 	public Glyph glyph(char c) { return byChar.get(c); }
 
 	/** Zusaetzlicher Vorschub zwischen zwei Zeichen, in Atlaseinheiten. */

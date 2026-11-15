@@ -103,6 +103,19 @@ jar {
 	from("NOTICE") {
 		rename { "${it}_${project.archives_base_name}" }
 	}
+
+	// DIE LIZENZEN FREMDER BESTANDTEILE MUESSEN MIT INS JAR.
+	//
+	// Nicht Kosmetik, sondern Bedingung: Die beiden Klangaufnahmen
+	// stehen unter CC BY, und CC BY verlangt die Namensnennung bei
+	// jeder Weitergabe. Wer das Jar von Modrinth laedt, bekommt die
+	// Dateien - also muss die Nennung darin stehen und nicht nur im
+	// Quelltextordner.
+	//
+	// Dasselbe gilt fuer die Schrift Geist unter der SIL Open Font
+	// License. Die stand bisher auch nur im Projektordner.
+	from("LICENSE-sounds.txt")
+	from("LICENSE-Geist.txt")
 }
 
 // ---------------------------------------------------------------------

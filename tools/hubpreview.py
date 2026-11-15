@@ -21,10 +21,9 @@ SRC = "/home/claude/lumilib/src/main/java/com/lumitier/lumilib/client"
 ASSETS = "/home/claude/lumilib/src/main/resources/assets/lumilib"
 
 
-def java_consts(path):
-    """Liest 'public static final int/float NAME = WERT;' aus einer Datei."""
+def java_consts(text):
+    """Liest 'public static final int/float NAME = WERT;' aus Java-Text."""
     out = {}
-    text = open(path, encoding="utf-8").read()
     for m in re.finditer(
         r"public static final (int|float)\s+(\w+)\s*=\s*([^;]+);", text
     ):
@@ -41,8 +40,39 @@ def java_consts(path):
     return out
 
 
-M = java_consts(f"{SRC}/Metrics.java")
-T = java_consts(f"{SRC}/Theme.java")
+def theme_palette(path, which):
+    """Liest eine der beiden Paletten aus Theme.java.
+
+    Seit dem Umschalter stehen die Werte nicht mehr bei den Feldern,
+    sondern in den Methoden dark() und light(). Gelesen wird genau die
+    Methode, die auch im Spiel laufen wuerde - damit die Vorschau nicht
+    heimlich eine dritte Palette erfindet.
+
+    which: "dark" oder "light"; ueber die Umgebungsvariable
+    LUMILIB_THEME umstellbar, ohne das Skript anzufassen.
+    """
+    text = open(path, encoding="utf-8").read()
+    start = text.index(f"private static void {which}() {{")
+    end = text.index("\n\t}", start)
+    out = java_consts(text)          # erst die Masse, die noch final sind
+    for m in re.finditer(r"(\w+)\s*=\s*([^;]+);", text[start:end]):
+        name, raw = m.group(1), m.group(2).strip()
+        try:
+            if raw.startswith("0x"):
+                out[name] = int(raw, 16)
+            elif raw.endswith(("F", "f")):
+                out[name] = float(raw.rstrip("Ff"))
+            else:
+                out[name] = int(raw)
+        except ValueError:
+            pass
+    return out
+
+
+import os
+
+M = java_consts(open(f"{SRC}/Metrics.java", encoding="utf-8").read())
+T = theme_palette(f"{SRC}/Theme.java", os.environ.get("LUMILIB_THEME", "dark"))
 
 FONTS = {}
 for nm in ("regular", "bold"):
@@ -132,6 +162,52 @@ class Canvas:
         cc = col[oy:oy + hh, ox:ox + ww]
         self.rgb[sl] = self.rgb[sl] * (1 - aa_) + cc * aa_
 
+    _ICONS = None
+
+    def _sdf_icon(self, name, x, y, w, h, color, opacity):
+        """Ein Zeichen aus dem Abstandsfeld-Atlas - wie SdfIcons im Spiel.
+
+        Die Kante wird aus dem Abstand gerechnet, nicht aus dem Bild
+        skaliert. Deshalb kommt hier dasselbe heraus wie auf der
+        Grafikkarte und nicht eine weichgezeichnete Verkleinerung."""
+        import json
+        from PIL import Image as _I
+        if Canvas._ICONS is None:
+            try:
+                meta = json.load(open(f"{ASSETS}/sdf/icons.json", encoding="utf-8"))
+                tex = np.asarray(_I.open(
+                    f"{ASSETS}/textures/sdf/icons.png").convert("RGBA"))
+                Canvas._ICONS = (meta, tex[..., 3].astype(np.float32) / 255.0)
+            except Exception:
+                Canvas._ICONS = (None, None)
+        meta, field = Canvas._ICONS
+        if meta is None or name not in meta["icons"]:
+            return False
+
+        cell = meta["icons"][name]
+        # Zelle ist groesser als das Zeichen - siehe SdfIcons.
+        box = w * meta["cell"] / meta["inner"]
+        off = (box - w) / 2.0
+        px = max(1, int(round(box * Z)))
+        sub = field[cell["y"]:cell["y"] + cell["h"], cell["x"]:cell["x"] + cell["w"]]
+        img = _I.fromarray((sub * 255).astype("uint8")).resize((px, px), _I.BILINEAR)
+        d = np.asarray(img).astype(np.float32) / 255.0 - 0.5
+        # Kantenbreite: ein Zielpixel, wie DISTANCE_RANGE im Shader.
+        rng = 2.0 * meta["spread"] * px / cell["h"]
+        alpha = np.clip(d * rng + 0.5, 0.0, 1.0) * opacity
+        a_, c_ = argb(color) if color is not None else (1.0, np.array([1.0, 1.0, 1.0]))
+        alpha = alpha * a_
+        rgb = np.broadcast_to(c_.reshape(1, 1, 3), alpha.shape + (3,))
+        x0, y0 = int((x - off) * Z), int((y - off) * Z)
+        dy1, dx1 = min(self.h, y0 + alpha.shape[0]), min(self.w, x0 + alpha.shape[1])
+        if dy1 <= y0 or dx1 <= x0 or x0 < 0 or y0 < 0:
+            return True
+        a2 = alpha[:dy1 - y0, :dx1 - x0][..., None]
+        c2 = rgb[:dy1 - y0, :dx1 - x0]
+        reg = self.rgb[y0:dy1, x0:dx1]
+        self.rgb[y0:dy1, x0:dx1] = reg * (1 - a2) + c2 * a2
+        return True
+
     def sprite(self, name, x, y, w, h, color=None, radius=None, opacity=1.0):
         """Echtes Sprite aus dem Projekt, bei Bedarf eingefaerbt.
 
@@ -140,13 +216,23 @@ class Canvas:
         im = None
         # Erst die GUI-Sprites, dann die mitgelieferten Katalog-Icons -
         # dieselben zwei Orte, aus denen der Hub zieht.
-        for folder in ("textures/gui/sprites", "textures/mod_catalog"):
+        if "/" in name:
+            folders, name = (name.rsplit("/", 1)[0],), name.rsplit("/", 1)[1]
+            folders = (f"textures/{folders[0]}",)
+        else:
+            folders = ("textures/gui/sprites", "textures/mod_catalog")
+        for folder in folders:
             try:
                 im = _I.open(f"{ASSETS}/{folder}/{name}.png").convert("RGBA")
                 break
             except FileNotFoundError:
                 continue
         if im is None:
+            # Kein PNG - dann liegt das Zeichen im Abstandsfeld-Atlas.
+            # Seit SdfIcons ist das der Normalfall fuer alle Lucide-Zeichen;
+            # die PNGs daneben sind nur noch Rueckfall fuer alte Spielstaende.
+            if self._sdf_icon(name, x, y, w, h, color, opacity):
+                return
             return
         im = im.resize((max(1, int(w * Z)), max(1, int(h * Z))), _I.LANCZOS)
         arr = np.asarray(im).astype(float) / 255.0
@@ -206,6 +292,63 @@ class Canvas:
             if gl:
                 deepest = max(deepest, gl["by"] + gl["h"] - baseline)
         return deepest * px / meta["size"]
+
+    def cap_centre_of(self, center_y, cap, descender, px, bold=False):
+        """Ui.capCentreOf - sichtbare Mitte der Versalien einer Zeile, die
+        mit drawCenteredLine auf center_y gesetzt wird."""
+        top = center_y - (cap + descender + 1) // 2
+        return top + self.ink_top_offset(px, bold) + cap / 2.0
+
+    def x_height(self, px, bold=False):
+        """SdfFont.xHeight - Tintenhoehe des x."""
+        meta, _ = FONTS["bold" if bold else "regular"]
+        g = meta["glyphs"].get("x")
+        if not g:
+            return self.cap_height(px, bold)
+        pad = meta.get("pad", meta["spread"] + 2)
+        return (g["h"] - 2 * pad) * px / meta["size"]
+
+    def wrap(self, s, max_width, px, bold=False):
+        """Ui.wrap - Umbruch an Wortgrenzen, gemessen in derselben Staffel."""
+        out, line = [], ""
+        if not s or max_width <= 0:
+            return out
+        for word in s.split(" "):
+            if not line:
+                line = word
+                continue
+            probe = line + " " + word
+            if self.width(probe, px, bold) <= max_width:
+                line = probe
+            else:
+                out.append(line)
+                line = word
+        if line:
+            out.append(line)
+        return out
+
+    def cap_height(self, px, bold=False):
+        """SdfFont.capHeight - Tintenhoehe des H."""
+        meta, _ = FONTS["bold" if bold else "regular"]
+        g = meta["glyphs"].get("H")
+        pad = meta.get("pad", meta["spread"] + 2)
+        return (g["h"] - 2 * pad) * px / meta["size"]
+
+    def cap_block_centre_of(self, center_y, cap, descender, px, bold=False):
+        """Ui.capBlockCentreOf - Mitte Oberkante Versalien bis Schreiblinie."""
+        top = center_y - (cap + descender + 1) // 2
+        return top + self.ink_top_offset(px, bold) + self.cap_height(px, bold) / 2.0
+
+    def optical_centre_of(self, center_y, cap, descender, px, bold=False):
+        """Ui.opticalCentreOf - Mitte des x-Bandes, nicht des Versalblocks."""
+        c = self.cap_centre_of(center_y, cap, descender, px, bold)
+        return c + (self.cap_height(px, bold) - self.x_height(px, bold)) / 4.0
+
+    def line_centre_in(self, top, height, cap, descender, px, bold=False):
+        """Ui.lineCentreIn - Versalblock mittig im Rechteck."""
+        ch = self.cap_height(px, bold)
+        capTop = top + (height - ch) / 2.0
+        return round(capTop - self.ink_top_offset(px, bold) + (cap + descender + 1) // 2)
 
     def text_centered_in(self, s, x, top, height, px, color, cap, bold=False):
         """Ui.drawCenteredIn - eine Zeile mittig im Rechteck."""

@@ -42,6 +42,29 @@ public final class LumiLib {
 		public boolean showSession = true;
 
 		/**
+		 * Dunkles Thema statt des hellen Glases.
+		 *
+		 * Als WAHRHEITSWERT und nicht als Name der Palette: Es gibt genau
+		 * zwei, und ein Schalter laesst sich nicht auf einen Wert stellen,
+		 * den es nicht gibt. Ein Name in der Datei haette beim naechsten
+		 * Start eine Behandlung fuer Tippfehler gebraucht.
+		 */
+		public boolean darkTheme = true;
+
+		/**
+		 * Lautstaerke des Hintergrundtons im Hub, in Prozent.
+		 *
+		 * ALS PROZENT UND NICHT ALS KOMMAZAHL: In der Datei steht dann 50
+		 * und nicht 0.5, und ein Regler mit ganzen Schritten braucht
+		 * keine Behandlung fuer 0.30000000000000004.
+		 *
+		 * NULL IST AUS: Ein zweiter Schalter daneben waere eine zweite
+		 * Stelle, an der dasselbe steht - und die Frage, was gilt, wenn
+		 * der Schalter an ist und die Lautstaerke null.
+		 */
+		public int hubSoundVolume = 50;
+
+		/**
 		 * Nicht installierte Mods in der Liste zeigen.
 		 *
 		 * An: Das Verzeichnis steht vollstaendig da, Fehlendes ausgegraut

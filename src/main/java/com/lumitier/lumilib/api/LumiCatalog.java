@@ -47,8 +47,21 @@ public final class LumiCatalog {
 	 * Mod als "nicht installiert" an.
 	 */
 	public static final List<Entry> KNOWN = List.of(
+		// Zuerst das Fundament: LumiLib selbst und das Gegenstueck, mit
+		// dem ein Server einzelne Mods abschalten kann. Von beiden haengt
+		// ab, ob der Rest ueberhaupt laeuft.
 		new Entry("lumilib", "LumiLib",
 			"https://modrinth.com/mod/lumilib"),
+		new Entry("lumilibcontrol", "LumiLibControl",
+			"https://modrinth.com/mod/lumilibcontrol"),
+
+		// Dann die Werkzeuge.
+		new Entry("resourcepackstudio", "Resource Pack Studio",
+			"https://modrinth.com/mod/resource-pack-studio"),
+		new Entry("ipaddresshider", "IP Address Hider",
+			"https://modrinth.com/mod/ip-address-hider"),
+
+		// Dann die Mods, die am Aussehen des Spiels drehen.
 		new Entry("perpetualsnow", "Perpetual Snow",
 			"https://modrinth.com/mod/perpetual-snow"),
 		new Entry("shadowtweaks", "Shadow Tweaks",

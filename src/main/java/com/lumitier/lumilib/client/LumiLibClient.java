@@ -37,9 +37,16 @@ public class LumiLibClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		LumiLib.load();
 
+		// Palette setzen, BEVOR irgendetwas zeichnet. Danach waere der
+		// erste Bildaufbau noch in der anderen Palette.
+		applyTheme();
+
 		// Empfang fuer LumiLibControlPlugin. Kostet nichts, solange kein
 		// Server das Plugin hat - dann kommt einfach nie ein Paket.
 		ServerRules.init();
+
+		// Klang im Verzeichnis anmelden, bevor ihn jemand abspielen will.
+		HubSound.init();
 
 		// Knopf im Haupt- und Pausemenue.
 		MenuButtons.init();
@@ -63,6 +70,14 @@ public class LumiLibClient implements ClientModInitializer {
 		// Spielers aendert sich nichts - wer die Fortschritte auf L haben
 		// will, legt LumiLib auf eine andere Taste.
 		ClientTickEvents.START_CLIENT_TICK.register(client -> {
+			// VOR den Abbruchbedingungen weiter unten: Die Spielmusik
+			// soll stumm sein, solange der Hub zu sehen ist, und danach
+			// wieder laufen. Haengte das an den Methoden des Fensters,
+			// bliebe die Musik stumm, sobald der Hub einmal auf einem
+			// unerwarteten Weg verlassen wird. Hier richtet sie sich
+			// jeden Tick nach dem, was wirklich auf dem Schirm ist.
+			HubSound.updateMusic(client);
+
 			// while statt if: wurde die Taste in einem Tick mehrfach
 			// gedrueckt, leert die Schleife den Puffer sauber.
 			boolean open = false;
@@ -135,7 +150,20 @@ public class LumiLibClient implements ClientModInitializer {
 					v -> LumiLib.cfg.showMissing = v, true)
 				.toggle("menu_button",
 					() -> LumiLib.cfg.menuButton,
-					v -> LumiLib.cfg.menuButton = v, true);
+					v -> LumiLib.cfg.menuButton = v, true)
+			.section("appearance")
+				.toggle("dark_theme",
+					() -> LumiLib.cfg.darkTheme,
+					v -> {
+						LumiLib.cfg.darkTheme = v;
+						applyTheme();
+					}, true)
+				.intSlider("hub_sound_volume", 0, 100, 5,
+					() -> LumiLib.cfg.hubSoundVolume,
+					v -> {
+						LumiLib.cfg.hubSoundVolume = v;
+						HubSound.settingChanged();
+					}, 50);
 
 		// Die Zeile entsteht gar nicht erst, wenn Mod Menu fehlt. Ein
 		// Knopf, der nichts tun kann, ist schlimmer als keiner.
@@ -143,6 +171,18 @@ public class LumiLibClient implements ClientModInitializer {
 			b.section("tools").action("open_mod_menu", LumiLibClient::openModMenu);
 		}
 		return b.save(LumiLib::save).build();
+	}
+
+	/**
+	 * Setzt die Palette nach dem, was in der Einstellung steht.
+	 *
+	 * Steht an einer Stelle und nicht an zweien: Beim Start und beim
+	 * Umschalten muss dasselbe passieren, und die Shader-Pipelines haengen
+	 * daran. Zwei Aufrufstellen, die auseinanderlaufen, waeren ein
+	 * Fehlerbild, das man erst nach dem Neustart sieht.
+	 */
+	private static void applyTheme() {
+		Theme.apply(LumiLib.cfg.darkTheme ? Theme.Variant.DARK : Theme.Variant.LIGHT);
 	}
 
 	/**

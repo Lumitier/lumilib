@@ -15,21 +15,35 @@ BODY_D = 4
 ADV = BODY_H + BODY_D + 2              # Ui.advance(BODY_H, BODY_D, 2)
 ADV3 = BODY_H + BODY_D + 3
 
+# Hoehe des zweizeiligen Blocks - dieselbe Rechnung wie
+# SettingsList.descBlockH(). SET_DESC_GAP misst Oberkante zu Oberkante
+# und enthaelt BODY_H schon; wer es nochmal addiert, haengt die Luft
+# unten an.
+DESC_BLOCK = M["SET_DESC_GAP"] + SMALL_H + 3
+
+# Reihenfolge, Namen und Kennungen wie in LumiCatalog.KNOWN. Wer dort
+# etwas aendert, muss es hier mitfuehren - die Vorschau liest den Katalog
+# nicht ein, weil er Java ist und keine Daten.
 MODS = [
-    ("LumiLib", "1.0.0", "Shared foundation and hub for Lumitier's mods.", "ok"),
+    ("LumiLib", "1.5.4", "Shared foundation and hub for Lumitier's mods.", "ok"),
+    ("LumiLibControl", "1.1.0", "Lets a server switch single mods off.", "ok"),
+    ("Resource Pack Studio", "", "Not installed.", "miss"),
+    ("IP Address Hider", "1.2.0", "Hides server addresses on screen.", "ok"),
+    ("Perpetual Snow", "1.3.0", "Keeps the world under snow.", "ok"),
+    ("Shadow Tweaks", "1.2.0", "Control over entity shadows.", "ok"),
+    ("Item Drop Tweaks", "1.2.0", "Control over dropped items.", "ok"),
     ("Experience Orb Tweaks", "", "Not installed.", "miss"),
-    ("Item Drop Tweaks", "", "Not installed.", "miss"),
-    ("Perpetual Snow", "", "Not installed.", "miss"),
-    ("Shadow Tweaks", "", "Not installed.", "miss"),
 ]
 
-# Name -> Kennung, dieselben wie in LumiCatalog.KNOWN
 IDS = {
     "LumiLib": "lumilib",
-    "Experience Orb Tweaks": "xporbtweaks",
-    "Item Drop Tweaks": "itemdroptweaks",
+    "LumiLibControl": "lumilibcontrol",
+    "Resource Pack Studio": "resourcepackstudio",
+    "IP Address Hider": "ipaddresshider",
     "Perpetual Snow": "perpetualsnow",
     "Shadow Tweaks": "shadowtweaks",
+    "Item Drop Tweaks": "itemdroptweaks",
+    "Experience Orb Tweaks": "xporbtweaks",
 }
 
 
@@ -118,7 +132,7 @@ class Hub:
         c.sprite("loader", x, fmid - M["HEAD"] // 2, M["HEAD"], M["HEAD"], T["TEXT_MUTED"])
         ttop = fmid - (ADV + SMALL_H + 3) // 2
         c.text("Fabric 1.21.11", x + M["HEAD"] + 8, ttop, 12.5, T["TEXT"], bold=True)
-        c.text("LumiLib 1.0.0", x + M["HEAD"] + 8, ttop + ADV, 10, T["TEXT_FAINT"])
+        c.text("LumiLib 1.5.4", x + M["HEAD"] + 8, ttop + ADV, 10, T["TEXT_FAINT"])
 
     def mod_icon(self, name, x, y, size, missing):
         """Wie LumiHubScreen.drawModIcon: mitgeliefertes Icon mit runden
@@ -155,11 +169,19 @@ class Hub:
             # Text, sonst sitzt das Symbol daneben und nichts ist zentriert.
             blockW = isz + M["ROW_ICON_GAP"] + c.width(label, 12.5, bold)
             ix = x + (w - blockW) // 2
+        # Erst der Text (Versalblock mittig in der Zeile), dann die
+        # Kachel auf die OPTISCHE Mitte - wie LumiHubScreen.drawNavRow.
+        line_y = (mid if label == "All Mods"
+                  else c.line_centre_in(y, M["ROW_H"], BODY_H, BODY_D, 12.5, bold))
+        # Mitte des Versalblocks, mit halbem Pixel - wie drawNavRow.
+        iy = (mid - isz / 2.0 if label == "All Mods"
+              else c.cap_block_centre_of(line_y, BODY_H, BODY_D, 12.5, bold)
+                   - isz / 2.0)
         if label == "All Mods":
-            c.sprite("loader", ix, mid - isz // 2, isz, isz,
+            c.sprite("loader", ix, iy, isz, isz,
                      T["TEXT"] if selected else T["TEXT_MUTED"])
         else:
-            self.mod_icon(label, ix, mid - isz // 2, isz, dimmed)
+            self.mod_icon(label, ix, iy, isz, dimmed)
         col = T["TEXT_FAINT"] if dimmed else (T["TEXT"] if selected else T["TEXT_MUTED"])
         tx = ix + isz + M["ROW_ICON_GAP"]
         if label == "All Mods":
@@ -169,7 +191,7 @@ class Hub:
                                bold=bold)
         else:
             # Liste: gemeinsame Schreiblinie, wie Ui.drawCenteredLine.
-            c.text(label, tx, mid - (BODY_H + BODY_D + 1) // 2, 12.5, col,
+            c.text(label, tx, line_y - (BODY_H + BODY_D + 1) // 2, 12.5, col,
                    bold=bold)
 
     # ---------------- Inhalt ----------------
@@ -237,27 +259,55 @@ class Hub:
             if title:
                 c.text(title, x, y, 15, T["TEXT"], bold=True)
                 y += HEAD_H + M["SET_HEAD_GAP"]
-            gh = sum(self.row_h(r) for r in rows)
+            gh = sum(self.row_h(r, w) for r in rows)
             c.rounded(x, y, w, gh, 6, T["CARD"], "card")
             dy = y
             for i, r in enumerate(rows[:-1]):
-                dy += self.row_h(r)
+                dy += self.row_h(r, w)
+                if r[0] == "note" or rows[i + 1][0] == "note":
+                    continue
                 c.rect(x, dy, w, 1, T["DIVIDER"])
             ry = y
             for r in rows:
-                self.set_row(x, ry, w, self.row_h(r), r)
-                ry += self.row_h(r)
+                self.set_row(x, ry, w, self.row_h(r, w), r)
+                ry += self.row_h(r, w)
             y += gh
         return y
 
-    def row_h(self, r):
+    # Hinweis: Zeile wie jede andere, nur getoent - siehe SettingsList.
+    NOTE_LEAD, NOTE_ICON, NOTE_GAP = 13, 12, 7
+
+    def note_lines(self, label, w):
+        return self.c.wrap(label, w - M["SET_INSET"] * 2 - self.NOTE_ICON
+                           - self.NOTE_GAP, 12.5) or [""]
+
+    def row_h(self, r, w=None):
+        if r[0] == "note":
+            return M["SET_ROW_H"] + (len(self.note_lines(r[1], w)) - 1) * self.NOTE_LEAD
         return (M["SET_ROW_H"] if r[2] is None
-                else M["SET_PAD"] * 2 + BODY_H + M["SET_DESC_GAP"] + SMALL_H + 3)
+                else M["SET_PAD"] * 2 + DESC_BLOCK)
+
+    def draw_note(self, x, y, w, h, label, warn):
+        c = self.c
+        col = T["WARN"] if warn else T["TEXT_MUTED"]
+        c.rounded(x, y, w, h, 6, (col & 0xFFFFFF) | (0x24 << 24), "card")
+        lines = self.note_lines(label, w)
+        block = BODY_H + BODY_D + (len(lines) - 1) * self.NOTE_LEAD
+        top = y + (h - block) // 2
+        iy = (top + c.ink_top_offset(12.5) + c.cap_height(12.5) / 2.0
+              - self.NOTE_ICON / 2.0)
+        c.sprite("info", x + M["SET_INSET"], iy, self.NOTE_ICON, self.NOTE_ICON, col)
+        tx = x + M["SET_INSET"] + self.NOTE_ICON + self.NOTE_GAP
+        for i, ln in enumerate(lines):
+            c.text(ln, tx, top + i * self.NOTE_LEAD, 12.5, col)
 
     def set_row(self, x, y, w, h, r):
         """r = (art, label, desc, an)"""
         kind, label, desc, on = r
         c = self.c
+        if kind == "note":
+            self.draw_note(x, y, w, h, label, bool(on))
+            return
         tx = x + M["SET_INSET"]
         room = w - M["SET_INSET"] * 2 - (M["TOGGLE_W"] + 12 if kind == "toggle" else 0)
         # Hinweiszeile: nicht fett, Warnung rot - wie in SettingsList.
@@ -267,7 +317,7 @@ class Hub:
             c.text_centered_in(self.fit(label, room, 12.5, not note), tx, y, h,
                                12.5, col, BODY_H, bold=not note)
         else:
-            top = y + M["SET_PAD"]
+            top = y + (h - DESC_BLOCK) // 2
             c.text(self.fit(label, room, 12.5, not note), tx, top, 12.5, col, bold=not note)
             c.text(self.fit(desc, room, 10, False), tx, top + M["SET_DESC_GAP"],
                    10, T["TEXT_FAINT"])
@@ -355,12 +405,12 @@ class Hub:
 
 
 def settings_scene():
-    h = Hub(); h.sidebar(0)
+    h = Hub(); h.sidebar(5)          # Index von Shadow Tweaks in MODS
     name = "Shadow Tweaks"
     c = h.c
     headY = h.cy + 10
     c.text(name, h.cx, headY, 19, T["TEXT"], bold=True)
-    c.text("v1.0.0", h.cx + c.width(name, 19, True) + 8,
+    c.text("v1.2.0", h.cx + c.width(name, 19, True) + 8,
            headY + TITLE_H_CAP - SMALL_H, 10, T["TEXT_FAINT"])
 
     x, w, y = h.cx, h.cw, h.listTop
@@ -386,10 +436,13 @@ def settings_scene():
             ("slider", "Opacity", None, (1.0, "1")),
             ("slider", "Render Distance", "Blocks.", (0.2, "16")),
         ]),
+        # Nur zwei Zeilen: Die Vorschau schneidet nicht ab und rollt
+        # nicht. Im Spiel tut die Liste beides, hier wuerde ein dritter
+        # Eintrag einfach ueber den Fensterrand laufen und so aussehen,
+        # als waere das ein Fehler.
         ("Categories", [
             ("toggle", "Players", None, True),
             ("toggle", "Hostile Mobs", None, True),
-            ("toggle", "Items", None, False),
         ]),
     ])
     return h

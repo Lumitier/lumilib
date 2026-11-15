@@ -1,6 +1,8 @@
 package com.lumitier.lumilib.client;
 
+import com.lumitier.lumilib.LumiLib;
 import com.lumitier.lumilib.api.SettingsPage;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.util.Identifier;
@@ -97,12 +99,121 @@ final class SettingsList {
 	 * Unterlaenge, Innenabstand. Ohne Untertext nur die Beschriftung
 	 * zwischen den Innenabstaenden. Im Vorbild gemessen: 54 und 29.
 	 */
-	private static int rowHeight(SettingsPage.Row row) {
+	// ------------------------------------------------------------------
+	// HINWEISZEILEN
+	//
+	// Eine Meldung ist kein Bedienelement, sondern etwas, das man liest.
+	// Sie ist deshalb eine ZEILE WIE JEDE ANDERE, nur getoent: gleiche
+	// Hoehe, gleicher Einzug, gleiche Schreiblinie. Nur der Text ist
+	// umgebrochen statt gekuerzt, und die Zeile waechst dabei mit.
+	//
+	// WAS HIER VORHER FALSCH WAR, zweimal:
+	//
+	// 1. Ein eingerueckter Kasten mit eigenem Rand. Der sah fuer sich
+	//    genommen gut aus, aber sein Text begann weiter rechts als der
+	//    jeder anderen Zeile - und in einer Liste faellt genau das auf,
+	//    nicht die schoene Form.
+	//
+	// 2. Ein Symbol links davor rueckt den Text ein - der Einzug betraegt
+	//    12 Pixel, ein lesbares Symbol ebenfalls, daneben passt es nicht.
+	//    Das Symbol ist trotzdem da: Es steht AUF dem Einzug, der Text
+	//    dahinter. Die Zeile verliert damit die Flucht mit den anderen,
+	//    gewinnt aber das Zeichen, an dem man eine Meldung sofort als
+	//    solche erkennt. Bewusst so entschieden, nicht uebersehen.
+	// ------------------------------------------------------------------
+
+	/** Abstand zweier umgebrochener Zeilen, Oberkante zu Oberkante. */
+	private static final int NOTE_LEAD = 13;
+	/** Kantenlaenge des Zeichens - gerade, damit es auf die Textmitte passt. */
+	private static final int NOTE_ICON = 12;
+	private static final int NOTE_GAP = 7;
+
+	private static final Identifier NOTE_SIGN =
+		Identifier.of(com.lumitier.lumilib.LumiLib.MOD_ID, "info");
+
+	private static java.util.List<String> noteLines(SettingsPage.Note n, int w) {
+		TextRenderer tr = MinecraftClient.getInstance().textRenderer;
+		java.util.List<String> out = new java.util.ArrayList<>(
+			Ui.wrap(tr, n.label().getString(),
+				w - Metrics.SET_INSET * 2 - NOTE_ICON - NOTE_GAP));
+		if (out.isEmpty()) {
+			out.add("");
+		}
+		return out;
+	}
+
+	/**
+	 * Eine Meldung: getoente Zeile, Text in der Flucht aller anderen.
+	 *
+	 * ZUR TOENUNG: Die Flaeche ist die Textfarbe mit niedriger Deckkraft,
+	 * kein eigener Farbwert. So passt sie automatisch, wenn das Thema
+	 * wechselt - und kann gar nicht erst gegen die Palette laufen.
+	 *
+	 * ZUR EINZEILIGEN FASSUNG: Sie geht ueber denselben Aufruf wie eine
+	 * gewoehnliche einzeilige Zeile. Nicht aus Bequemlichkeit - nur so
+	 * sitzt sie GARANTIERT auf derselben Schreiblinie wie die Zeile
+	 * darunter, auch wenn sich an der Mittelung je etwas aendert.
+	 */
+	private static void drawNote(DrawContext ctx, TextRenderer tr,
+	                             SettingsPage.Note n, int x, int y, int w, int h) {
+		int colour = n.warning() ? Theme.WARN : Theme.TEXT_MUTED;
+		Draw.roundedRect(ctx, x, y, w, h, 6, (0x24 << 24) | (colour & 0xFFFFFF));
+
+		java.util.List<String> lines = noteLines(n, w);
+
+		// Die Oberkante wird GERECHNET und nicht ueber drawCenteredIn
+		// bestimmt. Grund: drawCenteredIn mittet nach der Tinte GENAU
+		// DIESER Zeichenkette - eine Meldung mit "g" und "y" saesse damit
+		// anders als eine ohne, und gegen die Zeile darunter faellt das
+		// auf. Mit fester Versalhoehe und Unterlaenge sitzt jede Meldung
+		// auf derselben Schreiblinie wie jede gewoehnliche Zeile.
+		int blockH = Ui.BODY_H + Ui.BODY_D + (lines.size() - 1) * NOTE_LEAD;
+		int top = y + (h - blockH) / 2;
+
+		// Zeichen auf die Mitte des Versalblocks der ERSTEN Zeile. Nicht
+		// auf die Mitte der Zeile: Bei drei Zeilen Text stuende es sonst
+		// neben der zweiten und sahe aus, als gehoere es nicht zum Anfang.
+		float iconYf = Ui.capBlockCentreBelow(top, Ui.TOP_BODY, false)
+			- NOTE_ICON / 2.0F;
+		int iconY = (int) Math.floor(iconYf);
+		var pose = ctx.getMatrices();
+		pose.pushMatrix();
+		pose.translate(0.0F, iconYf - iconY);
+		Surface.icon(ctx, NOTE_SIGN, x + Metrics.SET_INSET, iconY, NOTE_ICON, colour);
+		pose.popMatrix();
+
+		int tx = x + Metrics.SET_INSET + NOTE_ICON + NOTE_GAP;
+		for (int i = 0; i < lines.size(); i++) {
+			Ui.drawTop(ctx, tr, Ui.text(lines.get(i)), tx,
+				top + i * NOTE_LEAD, Ui.TOP_BODY, colour);
+		}
+	}
+
+	private static int rowHeight(SettingsPage.Row row, int w) {
+		if (row instanceof SettingsPage.Note n) {
+			// Eine Zeile ist genau so hoch wie jede andere. Erst ab der
+			// zweiten waechst sie - und zwar um genau eine Zeile, nicht
+			// um Zeile plus Luft.
+			return Metrics.SET_ROW_H + (noteLines(n, w).size() - 1) * NOTE_LEAD;
+		}
 		if (row.description() == null) {
 			return Metrics.SET_ROW_H;
 		}
-		return Metrics.SET_PAD * 2 + Ui.BODY_H
-			+ Metrics.SET_DESC_GAP + Ui.SMALL_H + Ui.SMALL_D;
+		return Metrics.SET_PAD * 2 + descBlockH();
+	}
+
+	/**
+	 * Hoehe des zweizeiligen Blocks: von der Oberkante der Beschriftung
+	 * bis zur Unterlaenge des Untertextes.
+	 *
+	 * HIER STAND EIN FEHLER, und er war im Bild zu sehen: Die Rechnung
+	 * zaehlte BODY_H zusaetzlich zu SET_DESC_GAP. SET_DESC_GAP ist aber
+	 * der Abstand von Oberkante zu Oberkante, enthaelt die Hoehe der
+	 * Beschriftung also schon. Die neun Pixel landeten damit UNTEN:
+	 * 10 Pixel Luft ueber dem Text, 19 darunter.
+	 */
+	private static int descBlockH() {
+		return Metrics.SET_DESC_GAP + Ui.SMALL_H + Ui.SMALL_D;
 	}
 
 	/** Gesamthoehe - der Hub braucht sie, um das Rollen zu begrenzen. */
@@ -191,7 +302,7 @@ final class SettingsList {
 
 			int groupH = 0;
 			for (SettingsPage.Row row : rows) {
-				groupH += rowHeight(row);
+				groupH += rowHeight(row, w);
 			}
 			if (onGroup != null) {
 				onGroup.group(section, rows, headTop, x, y, w, groupH);
@@ -199,7 +310,7 @@ final class SettingsList {
 
 			int ry = y;
 			for (SettingsPage.Row row : rows) {
-				int rh = rowHeight(row);
+				int rh = rowHeight(row, w);
 				onRow.row(row, x, ry, w, rh);
 				ry += rh;
 			}
@@ -228,7 +339,14 @@ final class SettingsList {
 				// darueber liegen statt darunter.
 				int dy = gy;
 				for (int i = 0; i < rows.size() - 1; i++) {
-					dy += rowHeight(rows.get(i));
+					dy += rowHeight(rows.get(i), gw);
+					// Kein Strich neben einem Hinweis: Der traegt schon
+					// eine eigene getoente Flaeche, ein Strich direkt an
+					// deren Kante sieht aus wie ein Fehler im Abstand.
+					if (rows.get(i) instanceof SettingsPage.Note
+						|| rows.get(i + 1) instanceof SettingsPage.Note) {
+						continue;
+					}
 					Draw.hLine(ctx, gx, dy, gw, Theme.DIVIDER);
 				}
 			},
@@ -239,6 +357,11 @@ final class SettingsList {
 	private static void drawRow(DrawContext ctx, TextRenderer tr, SettingsPage page,
 	                            SettingsPage.Row row,
 	                            int x, int y, int w, int h, int mouseX, int mouseY) {
+		if (row instanceof SettingsPage.Note n) {
+			drawNote(ctx, tr, n, x, y, w, h);
+			return;
+		}
+
 		boolean hover = Draw.inside(mouseX, mouseY, x, y, w, h);
 		boolean slot = page.canResetAny();
 		int right = controlRight(page, x, w);
@@ -253,23 +376,22 @@ final class SettingsList {
 		int tx = x + Metrics.SET_INSET;
 		int room = w - Metrics.SET_INSET * 2 - controlWidth(row, slot);
 
-		// Ein Hinweis ist kein Bedienelement: nicht fett, und bei einer
-		// Warnung rot. Sonst sieht er aus wie etwas, das man anklicken kann.
-		boolean note = row instanceof SettingsPage.Note;
-		int labelColour = row instanceof SettingsPage.Note n && n.warning()
-			? Theme.WARN : (note ? Theme.TEXT_MUTED : Theme.TEXT);
+		int labelColour = Theme.TEXT;
 
 		if (row.description() == null) {
 			// Eine Zeile, also mittig - es gibt nichts, womit sie fluchten muss.
 			Ui.drawCenteredIn(ctx, tr,
-				note ? Ui.text(Ui.fit(tr, row.label().getString(), room))
-					 : Ui.bold(Ui.fitBold(tr, row.label().getString(), room)),
+				Ui.bold(Ui.fitBold(tr, row.label().getString(), room)),
 				tx, y, h, Ui.BODY_H, Ui.BODY_D, Ui.TOP_BODY, labelColour);
 		} else {
-			int top = y + Metrics.SET_PAD;
+			// Den ganzen Block mittig setzen, nicht am oberen Innenabstand
+			// festnageln. Dann bleibt die Zeile auch dann symmetrisch,
+			// wenn sich eine der Schriftgroessen aendert - und das
+			// Bedienelement rechts, das in der Zeilenmitte sitzt, fluchtet
+			// mit der Mitte des Blocks statt tiefer zu haengen.
+			int top = y + (h - descBlockH()) / 2;
 			Ui.drawTop(ctx, tr,
-				note ? Ui.text(Ui.fit(tr, row.label().getString(), room))
-					 : Ui.bold(Ui.fitBold(tr, row.label().getString(), room)),
+				Ui.bold(Ui.fitBold(tr, row.label().getString(), room)),
 				tx, top, Ui.TOP_BODY, labelColour);
 			Ui.drawTop(ctx, tr,
 				Ui.small(Ui.fitSmall(tr, row.description().getString(), room)),

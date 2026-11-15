@@ -126,16 +126,38 @@ public final class MenuButtons {
 
 		@Override
 		protected void drawIcon(DrawContext ctx, int mouseX, int mouseY, float delta) {
+			// DECKKRAFT DES BILDSCHIRMS MITNEHMEN.
+			//
+			// Der Titelbildschirm blendet beim Start alles langsam ein: Er
+			// ruft setWidgetAlpha, und jedes Bedienelement zeichnet sich mit
+			// diesem Wert. Vanillas Knoepfe tun das von selbst, eine eigene
+			// drawIcon NICHT - die zeichnet, was dort steht.
+			//
+			// Stand hier eine feste Deckkraft, war die Beschriftung samt
+			// Symbol von der ersten Zehntelsekunde an voll sichtbar,
+			// waehrend Minecrafts eigene Knoepfe noch durchsichtig waren.
+			// Die Leiste war also da, bevor es die anderen Knoepfe gab.
+			//
+			// drawButton ist Vanillas eigener Aufruf und nimmt die
+			// Deckkraft schon mit; nur was danach kommt, muss es selbst tun.
+			int a = Math.round(this.alpha * 255.0F);
+			if (a <= 0) {
+				return;
+			}
+			a = Math.min(255, a);
 			drawButton(ctx);
+
 			TextRenderer tr = MinecraftClient.getInstance().textRenderer;
 			int tw = tr.getWidth(getMessage());
 			int x0 = getX() + (getWidth() - (tw + GAP + ICON_SIZE)) / 2;
+			int rgb = this.active ? 0xFFFFFF : 0xA0A0A0;
 			ctx.drawTextWithShadow(tr, getMessage(), x0,
-				getY() + (getHeight() - 8) / 2, this.active ? 0xFFFFFFFF : 0xFFA0A0A0);
+				getY() + (getHeight() - 8) / 2, (a << 24) | rgb);
 			// Quelle 16x16, gezeichnet auf 12x12.
 			ctx.drawTexture(RenderPipelines.GUI_TEXTURED, ICON, x0 + tw + GAP,
 				getY() + (getHeight() - ICON_SIZE) / 2, 0.0F, 0.0F,
-				ICON_SIZE, ICON_SIZE, 16, 16, 16, 16);
+				ICON_SIZE, ICON_SIZE, 16, 16, 16, 16,
+				(a << 24) | 0xFFFFFF);
 		}
 	}
 }

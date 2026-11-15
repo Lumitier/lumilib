@@ -1,313 +1,304 @@
 package com.lumitier.lumilib.client;
 
 /**
- * Farben und Masse des Hubs.
+ * Farben und Masse des Hubs - zwei Paletten, umschaltbar.
  *
  * Format durchgehend ARGB als int (0xAARRGGBB).
  *
- * HERKUNFT DER WERTE - nichts davon ist geraten:
+ * WOHER DIE WERTE STAMMEN:
+ * Aus OneConfig selbst, Thema "Polyfrosted Dark" - abgelesen im
+ * Quelltext, nicht aus einem Bildschirmfoto geschaetzt:
+ *   modules/internal/.../internal/ui/themes/Impls.kt  (val PolyfrostedDark)
+ *   modules/internal/.../internal/ui/themes/Structs.kt (controlTrackColor)
+ *   modules/internal/.../oneconfig/internal/ThemeConfig.java (accentColor)
  *
- * 1. Aus einem Referenz-Screenshot pixelweise gemessen ergaben sich drei
- *    getrennte Helligkeitsstufen:
- *        Sidebar 173  <  Fenster 188  <  Karte 203
- *    Entscheidend ist die Reihenfolge: Die Sidebar ist DUNKLER (eingelassen),
- *    die Karte HELLER (erhaben). Ein frueherer Entwurf hatte beide mit Weiss
- *    aufgehellt - dadurch stand die Hierarchie auf dem Kopf, alle drei lagen
- *    innerhalb von 19 Helligkeitswerten, und das Ergebnis war ein weisser
- *    Klotz ohne erkennbare Struktur.
+ * Deren Benennung und was hier daraus wurde:
+ *   pageBackground      0xC411171C -> PANEL
+ *   sidebarBackground   0xB3151C22 -> SIDEBAR
+ *   chipBackground      0xB2232D32 -> CARD_HOVER, ROW_SELECTED
+ *   modCardBackground   0x59232D32 -> CARD, ROW_HOVER
+ *   componentBackground 0xFF1A2229 -> FIELD
+ *   borderColor         0x1AFFFFFF -> RIM, DIVIDER, FIELD_EDGE
+ *   textColor           0xFFD5DBFF -> TEXT, TEXT_MUTED
+ *   textColorSecondary  0xFF757883 -> TEXT_FAINT, NEUTRAL
+ *   controlTrackColor   0xFF74777F -> TOGGLE_OFF
+ *   controlThumbColor   0xFFFFFFFF -> TOGGLE_KNOB
+ *   accentColor         0xFF2B4BFF -> TOGGLE_ON
  *
- * 2. Die Farbtoene stammen aus einem oeffentlichen, MIT-lizenzierten
- *    Material-System (WalksyLib). Uebernommen ist die LEHRE daraus, kein
- *    Code: Flaechen tragen WARME Toene, kein neutrales Weiss oder Grau.
- *    Schrift ist nie voll deckend - 85 / 50 / 25 Prozent Schwarz statt
- *    0xFF000000. Und jede erhobene Flaeche wirft einen Schatten.
+ * ZWEI ABWEICHUNGEN, UND WARUM:
+ *
+ * 1. ACCENT bleibt das warme Gold 0xFFE8A33D. OneConfig faehrt dort
+ *    0xFFFFD700, aber das ist deren Sternfarbe, nicht deren Akzent -
+ *    und unser Gold steht so in jedem Mod-Logo. Eine Oberflaeche, deren
+ *    Akzent nicht zu ihren eigenen Symbolen passt, sieht zusammen-
+ *    gewuerfelt aus.
+ *
+ * 2. WARN und OK gibt es bei OneConfig in diesen Werten nicht. Beide
+ *    sind so gewaehlt, dass sie auf dem kuehlen Blaugrau stehen,
+ *    ohne zu leuchten.
+ *
+ * WAS AN DIESER PALETTE ANDERS IST ALS AN JEDER SELBSTGEBAUTEN:
+ * Sie ist nicht neutral grau, sondern KUEHL blaugruen - 17,23,28 statt
+ * 28,28,28. Das faellt einzeln nicht auf, aber gegen die weisse Schrift
+ * (die bei denen 213,219,255 ist, also leicht blaeulich, kein Weiss)
+ * ergibt es einen ruhigen Gesamteindruck statt eines Kontrastes aus
+ * Schwarz und Weiss. Genau das war an unserem warmen Grau falsch.
+ *
+ * ZWEI PALETTEN:
+ * DARK ist der Satz unten aus OneConfig, LIGHT das helle Glas, mit dem
+ * LumiLib angefangen hat. Umgeschaltet wird ueber apply(Variant); was
+ * dabei sonst noch passieren muss, steht dort.
  *
  * Die Masse stehen hier nur, wo sie absolut sein duerfen. Fenster- und
- * Spaltenbreiten werden im Screen aus der Bildschirmgroesse BERECHNET: die
- * logische Bildschirmbreite haengt an der GUI-Skalierung des Nutzers und
- * liegt meist zwischen 640 und 1000, nicht bei 1920.
+ * Spaltenbreiten werden im Screen aus der Bildschirmgroesse BERECHNET.
  */
 public final class Theme {
 
 	private Theme() {}
 
-	// --- Flaechen ------------------------------------------------------
-
-	/** Abdunkeln der Welt. Zurueckgenommen - der Blur verschleiert schon genug. */
-	// 0x6F statt der urspruenglichen 0x2E. Begruendung steht bei PANEL.
-	// Zum Vergleich: Minecrafts Inventar verdunkelt mit rund 0xC0.
-	public static final int SCRIM        = 0x6F000000;
-
-	// DURCHSICHT IST DER PUNKT.
-	//
-	// Gemessen wurde nicht nur Helligkeit, sondern die Standardabweichung
-	// innerhalb einer Flaeche - also ob der Hintergrund durchscheint:
-	//
-	//                  Referenz   erster Entwurf
-	//     Sidebar        21.1          0.2
-	//     Karte           6.4          0.2
-	//
-	// Bei der Referenz sieht man die unscharfe Welt DURCH die Flaechen,
-	// deshalb schwankt es dort. Der erste Entwurf lag bei 87% Deckkraft -
-	// da kam nichts durch, und genau das fehlte, nicht die Lichtbrechung.
-	//
-	// Die Werte hier lassen rund 45% des Hintergrunds durch.
-
-	/** Fenster: warmes Off-White, gut durchscheinend. */
-	// WARUM NICHT DURCHSICHTIGER:
-	// Bei 0x7A kamen 40 Prozent der Welt durch das Fenster. Ueber einer
-	// dunklen Szene sah das gut aus - der Entwurf lag ueber genau so einer.
-	// Ueber hellem Himmel wurde das Fenster so hell wie der Himmel dahinter
-	// und verschwand. Gemessen: Kontrast zur Umgebung 94 ueber der dunklen
-	// Szene, 35 ueber der hellen. Dasselbe Fenster, zwei Welten.
-	//
-	// Durchgerechnet ueber fuenf Szenen von Hoehle bis Schnee im Sonnenlicht
-	// (Scrim 0x6F, Panel 0xAF, 18 Prozent Welt sichtbar):
-	//   Fensterhelligkeit schwankt nur noch um 38 statt 82 Stufen
-	//   schlechtester Kontrast zur Umgebung 72 statt 32
-	//
-	// Achtzehn Prozent reichen, damit sich die weichgezeichnete Welt hinter
-	// dem Fenster sichtbar bewegt - das ist der Glaseindruck. Mehr macht das
-	// Fenster nicht glasiger, sondern nur wetterabhaengig.
-	public static final int PANEL        = 0xAFF3EEEB;
-	/** Sidebar: warmbrauner Schleier - eingelassen, also DUNKLER. */
-	public static final int SIDEBAR      = 0x3332261E;
-	/** Karte: heller Schleier - erhaben, also HELLER. */
-	public static final int CARD         = 0x5CFFFFFF;
-	/** Karte unter dem Mauszeiger. */
-	public static final int CARD_HOVER   = 0x8CFFFFFF;
-	/** Zeile in der Sidebar unter dem Mauszeiger. */
-	public static final int ROW_HOVER    = 0x3DFFFFFF;
 
 	/**
-	 * Ausgewaehlte Zeile in der Sidebar.
+	 * Welche Palette gerade gilt.
 	 *
-	 * Deutlich kraeftiger als ROW_HOVER - sonst ist nicht zu
-	 * unterscheiden, ob die Maus nur darueber steht oder die Seite
-	 * wirklich offen ist.
+	 * DARK  die Palette aus OneConfigs "Polyfrosted Dark"
+	 * LIGHT das helle Glas, mit dem LumiLib angefangen hat
 	 */
-	public static final int ROW_SELECTED = 0x7AFFFFFF;
+	public enum Variant { DARK, LIGHT }
 
-	/** Lichtkante auf dem Fenster. */
-	public static final int RIM          = 0x94FFFFFF;
-	/** Lichtkante auf Karten, etwas zurueckhaltender. */
-	public static final int RIM_CARD     = 0x66FFFFFF;
+	private static Variant variant = Variant.DARK;
 
-	// --- Glas: Fase, Innenschatten, Glanz ------------------------------
-	//
-	// Diese drei erzeugen DICKE. Eine Flaeche ohne sie liest das Auge als
-	// aufgeklebtes Papier, egal wie durchsichtig sie ist - Durchsicht allein
-	// macht noch kein Glas.
-
-	/** Helle Innenkante oben. */
-	public static final int BEVEL_LIGHT  = 0x80FFFFFF;
-	/** Dunkle Innenkante unten. */
-	public static final int BEVEL_DARK   = 0x38000000;
-	/** Innenkante auf Karten, zurueckhaltender. */
-	public static final int BEVEL_LIGHT_CARD = 0x4DFFFFFF;
-	public static final int BEVEL_DARK_CARD  = 0x24000000;
-	/** Dunkler Saum ganz innen. */
-	public static final int INNER        = 0x14000000;
-	public static final int INNER_CARD   = 0x0D000000;
-	/**
-	 * Glanzbahn - AUS.
-	 *
-	 * Addierte sich mit Innenschatten und Scrim zu einem milchigen Schleier
-	 * ueber der gesamten Flaeche und frass den Textkontrast auf. Eine
-	 * Glanzbahn funktioniert auf einer kraeftigen Flaeche; auf einer stark
-	 * durchscheinenden wird sie zu Nebel.
-	 *
-	 * Bleibt als Wert stehen, damit sie sich spaeter wieder zuschalten
-	 * laesst, falls die Flaechen kraeftiger werden.
-	 */
-	public static final int GLARE        = 0x00FFFFFF;
-	public static final int GLARE_CARD   = 0x00FFFFFF;
-
-	/** Schlagschatten unter dem Fenster. */
-	public static final int SHADOW       = 0x47000000;
-	/** Schlagschatten unter Karten. */
-	public static final int SHADOW_CARD  = 0x24000000;
-
-	/** Eingabefeld - Suchpille. */
-	/**
-	 * Eingabefeld - HELL, nicht dunkel.
-	 *
-	 * Zuerst stand hier 0x24 schwarz, dann 0x3D schwarz. Beides war
-	 * falsch: auf einer hellen Flaeche wird ein dunkles Feld zu einem
-	 * grauen Klotz, nicht zu einem Eingabefeld. Die Oberflaeche setzt
-	 * sonst ueberall HELLE Flaechen auf dunkleren Grund - Karten,
-	 * Sidebar, ausgewaehlte Zeilen. Das Feld macht es jetzt genauso.
-	 */
-	public static final int FIELD        = 0x3DFFFFFF;
-	public static final int FIELD_HOVER  = 0x52FFFFFF;
-	public static final int FIELD_FOCUS  = 0x70FFFFFF;
-	public static final int FIELD_EDGE   = 0x1FFFFFFF;
+	public static Variant variant() {
+		return variant;
+	}
 
 	/**
-	 * Kraeftigere Kante fuer Flaechen mit eigener Farbe.
+	 * Palette wechseln.
 	 *
-	 * FIELD_EDGE ist weisses Licht und verschwindet auf einem hellen
-	 * Verlauf - genau dort, wo der Farbwaehler eine Kante braucht.
-	 * Dunkel funktioniert auf jedem Grund.
+	 * WARUM DIE WERTE NICHT MEHR final SIND:
+	 * Sie waren Konstanten, und als Konstanten waren sie richtig - es gab
+	 * ja nur eine Palette. Mit zwei geht das nicht mehr: Der Compiler
+	 * setzt den Wert einer Konstanten an jeder Verwendungsstelle direkt
+	 * ein, ein Wechsel zur Laufzeit kaeme also nie an.
+	 *
+	 * WAS DABEI SONST NOCH PASSIEREN MUSS:
+	 * Ein Teil dieser Werte geht als Konstante IN DEN SHADER, einmal beim
+	 * Bauen der Pipeline. Eine Pipeline, die mit den hellen Werten gebaut
+	 * wurde, bleibt hell - egal was hier steht. Deshalb wirft Sdf seine
+	 * gebauten Pipelines weg, wenn die Palette wechselt. Das kostet beim
+	 * Umschalten einen Moment und danach nichts mehr.
+	 *
+	 * @return true, wenn sich wirklich etwas geaendert hat
 	 */
-	// ------------------------------------------------------------------
-	// GLASKANTE
-	//
-	// Drei Werte, die der Shader als Konstanten eingebaut bekommt. Sie
-	// stehen hier und nicht dort, damit Flaeche und Karte verschieden
-	// stark glaenzen koennen - eine Karte liegt auf dem Panel, nicht auf
-	// der Welt, und braucht weniger.
-	//
-	// SPEC  gerichtetes Glanzlicht an der oberen linken Rundung
-	// LENS  zweites helles Band innerhalb der Lichtkante
-	// DENS  wie stark die Flaeche zum Rand hin dichter wird
-	// ------------------------------------------------------------------
+	public static boolean apply(Variant next) {
+		if (next == null || next == variant) {
+			return false;
+		}
+		variant = next;
+		switch (next) {
+			case DARK -> dark();
+			case LIGHT -> light();
+		}
+		com.lumitier.lumilib.client.gpu.Sdf.paletteChanged();
+		return true;
+	}
 
-	public static final int SPEC        = 0xD9FFFFFF;
-	public static final int SPEC_CARD   = 0x8AFFFFFF;
-	public static final int LENS        = 0x4DFFFFFF;
-	public static final int LENS_CARD   = 0x2EFFFFFF;
 
-	/** Kein Farbwert, sondern ein Faktor: 0,45 heisst 45 % mehr am Rand. */
+	// --- Werte, von apply gesetzt --------------------------------------
+
+	public static int SCRIM;
+	public static int PANEL;
+	public static int SIDEBAR;
+	public static int CARD;
+	public static int CARD_HOVER;
+	public static int ROW_HOVER;
+	public static int ROW_SELECTED;
+	public static int RIM;
+	public static int RIM_CARD;
+	public static int BEVEL_LIGHT;
+	public static int BEVEL_DARK;
+	public static int BEVEL_LIGHT_CARD;
+	public static int BEVEL_DARK_CARD;
+	public static int INNER;
+	public static int INNER_CARD;
+	public static int GLARE;
+	public static int GLARE_CARD;
+	public static int SHADOW;
+	public static int SHADOW_CARD;
+	public static int FIELD;
+	public static int FIELD_HOVER;
+	public static int FIELD_FOCUS;
+	public static int FIELD_EDGE;
+	public static int SPEC;
+	public static int SPEC_CARD;
+	public static int LENS;
+	public static int LENS_CARD;
+	public static float REFRACT;
+	public static float THICK;
+	public static float BLUR;
+	public static float DISPERSE;
+	public static float FRESNEL;
+	public static float FRESNEL_H;
+	public static int FRESNEL_A;
+	public static int GLASS_TINT;
+	public static float TONE_FLOOR;
+	public static float TONE_CEIL;
+	public static float SATURATION;
+	public static float DENS;
+	public static float DENS_CARD;
+	public static int EDGE_STRONG;
+	public static int EDGE_LIGHT;
+	public static int DIVIDER;
+	public static int ICON_BG;
+	public static int WARN;
+	public static int TOGGLE_ON;
+	public static int TOGGLE_OFF;
+	public static int TOGGLE_KNOB;
+	public static int TEXT;
+	public static int TEXT_MUTED;
+	public static int TEXT_FAINT;
+	public static int ACCENT;
+	public static int OK;
+	public static int NEUTRAL;
+
+	static {
+		dark();
+	}
+
+
+	/** Dunkel - Werte aus OneConfigs "Polyfrosted Dark". */
+	private static void dark() {
+		SCRIM = 0x8A000000;
+		PANEL = 0xC411171C;
+		SIDEBAR = 0xB3151C22;
+		CARD = 0x59232D32;
+		CARD_HOVER = 0xB2232D32;
+		ROW_HOVER = 0x59232D32;
+		ROW_SELECTED = 0xB2232D32;
+		RIM = 0x1AFFFFFF;
+		RIM_CARD = 0x14FFFFFF;
+		BEVEL_LIGHT = 0x1AFFFFFF;
+		BEVEL_DARK = 0x42000000;
+		BEVEL_LIGHT_CARD = 0x12FFFFFF;
+		BEVEL_DARK_CARD = 0x2E000000;
+		INNER = 0x2E000000;
+		INNER_CARD = 0x1A000000;
+		GLARE = 0x00FFFFFF;
+		GLARE_CARD = 0x00FFFFFF;
+		SHADOW = 0x73000000;
+		SHADOW_CARD = 0x3D000000;
+		FIELD = 0xFF1A2229;
+		FIELD_HOVER = 0xFF232D32;
+		FIELD_FOCUS = 0xFF2B3740;
+		FIELD_EDGE = 0x1AFFFFFF;
+		SPEC = 0x24FFFFFF;
+		SPEC_CARD = 0x14FFFFFF;
+		LENS = 0x12FFFFFF;
+		LENS_CARD = 0x0AFFFFFF;
+		REFRACT = 44.0F;
+		THICK = 40.0F;
+		BLUR = 11.0F;
+		DISPERSE = 0.05F;
+		FRESNEL = 16.0F;
+		FRESNEL_H = 4.0F;
+		FRESNEL_A = 0x2EFFFFFF;
+		GLASS_TINT = 0xA511171C;
+		TONE_FLOOR = 0.03F;
+		TONE_CEIL = 0.22F;
+		SATURATION = 0.30F;
+		DENS = 0.30F;
+		DENS_CARD = 0.15F;
+		EDGE_STRONG = 0x66000000;
+		EDGE_LIGHT = 0x1AFFFFFF;
+		DIVIDER = 0x1AFFFFFF;
+		ICON_BG = 0xFF232D32;
+		WARN = 0xFFFF6B61;
+		TOGGLE_ON = 0xFF2B4BFF;
+		TOGGLE_OFF = 0xFF74777F;
+		TOGGLE_KNOB = 0xFFFFFFFF;
+		TEXT = 0xFFD5DBFF;
+		TEXT_MUTED = 0xFFD5DBFF;
+		TEXT_FAINT = 0xFF757883;
+		ACCENT = 0xFFE8A33D;
+		OK = 0xFF4ED98A;
+		NEUTRAL = 0xFF757883;
+	}
+
+
 	/**
-	 * Brechung, in Bildschirmpunkten.
+	 * Hell - das Glas, mit dem LumiLib angefangen hat.
 	 *
-	 * REFRACT  wie weit die Lesestelle am Rand hoechstens wandert
-	 * THICK    ueber wie viele Punkte nach innen die Brechung abklingt
-	 * BLUR     Abstand der Weichzeichner-Abgriffe
-	 *
-	 * Gemessen in ECHTEN Punkten, nicht in logischen: Der Shader liest
-	 * in der Bildschirmkopie nach, und die hat die Aufloesung des
-	 * Fensters. Bei GUI-Skalierung 3 ist ein logischer Pixel dort drei.
+	 * Die Werte sind die ORIGINALEN, nicht nachgebaute: gezogen aus
+	 * lumilib-1.5.3-sources.jar, also dem letzten Stand vor dem Umbau auf
+	 * dunkel. Sie waren seinerzeit aus einem Referenzbild pixelweise
+	 * gemessen - Sidebar 173 unter Fenster 188 unter Karte 203, Durchsicht
+	 * 18 Prozent, das Tonband 0,30 bis 0,80 ueber fuenf Szenen von Hoehle
+	 * bis Schnee nachgerechnet. Nichts davon haette sich aus dem dunklen
+	 * Satz zurueckrechnen lassen.
 	 */
-	public static final float REFRACT   = 44.0F;
-	public static final float THICK     = 40.0F;
-	public static final float BLUR      = 11.0F;
+	private static void light() {
+		SCRIM = 0x6F000000;
+		PANEL = 0xAFF3EEEB;
+		SIDEBAR = 0x3332261E;
+		CARD = 0x5CFFFFFF;
+		CARD_HOVER = 0x8CFFFFFF;
+		ROW_HOVER = 0x3DFFFFFF;
+		ROW_SELECTED = 0x7AFFFFFF;
+		RIM = 0x94FFFFFF;
+		RIM_CARD = 0x66FFFFFF;
+		BEVEL_LIGHT = 0x80FFFFFF;
+		BEVEL_DARK = 0x38000000;
+		BEVEL_LIGHT_CARD = 0x4DFFFFFF;
+		BEVEL_DARK_CARD = 0x24000000;
+		INNER = 0x14000000;
+		INNER_CARD = 0x0D000000;
+		GLARE = 0x00FFFFFF;
+		GLARE_CARD = 0x00FFFFFF;
+		SHADOW = 0x47000000;
+		SHADOW_CARD = 0x24000000;
+		FIELD = 0x3DFFFFFF;
+		FIELD_HOVER = 0x52FFFFFF;
+		FIELD_FOCUS = 0x70FFFFFF;
+		FIELD_EDGE = 0x1FFFFFFF;
+		SPEC = 0xD9FFFFFF;
+		SPEC_CARD = 0x8AFFFFFF;
+		LENS = 0x4DFFFFFF;
+		LENS_CARD = 0x2EFFFFFF;
+		REFRACT = 44.0F;
+		THICK = 40.0F;
+		BLUR = 11.0F;
+		DISPERSE = 0.05F;
+		FRESNEL = 16.0F;
+		FRESNEL_H = 4.0F;
+		FRESNEL_A = 0x59FFFFFF;
+		GLASS_TINT = 0x8AF3EEEB;
+		TONE_FLOOR = 0.30F;
+		TONE_CEIL = 0.80F;
+		SATURATION = 0.42F;
+		DENS = 0.45F;
+		DENS_CARD = 0.22F;
+		EDGE_STRONG = 0x3D000000;
+		EDGE_LIGHT = 0x52FFFFFF;
+		DIVIDER = 0x2E3C3C43;
+		ICON_BG = 0x2E000000;
+		WARN = 0xFFB3261E;
+		TOGGLE_ON = 0xFF0084E8;
+		TOGGLE_OFF = 0x33000000;
+		TOGGLE_KNOB = 0xFFFFFFFF;
+		TEXT = 0xFF14141A;
+		TEXT_MUTED = 0xC4000000;
+		TEXT_FAINT = 0x99000000;
+		ACCENT = 0xFFE8A33D;
+		OK = 0xE62E8B4F;
+		NEUTRAL = 0xD98E8E93;
+	}
 
-	/**
-	 * Dispersion - wie weit Rot und Blau auseinanderlaufen.
-	 *
-	 * Echtes Glas bricht kurze Wellenlaengen staerker. Ohne das sieht
-	 * die Brechung aus wie ein Versatz; mit ihm entsteht am Rand ein
-	 * feiner Farbsaum, und genau der liest sich als Glas. Walksy fuehrt
-	 * denselben Wert als REF_DISPERSION.
-	 *
-	 * 0,07 heisst: Blau wandert 7 % weiter als Gruen, Rot 7 % weniger.
-	 * Darueber wird es ein Regenbogen statt eines Saums.
-	 */
-	public static final float DISPERSE  = 0.05F;
 
-	/**
-	 * Fresnel - das Aufhellen zum Rand hin.
-	 *
-	 * Flach auf Glas geschaut ist es durchsichtig, streifend wird es zum
-	 * Spiegel. FRESNEL_PX ist die Strecke nach innen, ueber die das
-	 * abklingt; HARD, wie scharf. Das ist der Unterschied zwischen
-	 * "Rand mit Linie" und "Scheibe mit Dicke".
-	 */
-	public static final float FRESNEL   = 16.0F;
-	public static final float FRESNEL_H = 4.0F;
-	public static final int   FRESNEL_A = 0x59FFFFFF;
+	// --- Masse, von der Palette unabhaengig ----------------------------
 
-	/**
-	 * Toenung NUR fuer die brechende Flaeche.
-	 *
-	 * Deutlich durchsichtiger als PANEL: Wer durch Glas schaut, soll
-	 * auch etwas sehen. PANEL ist mit 69 % darauf ausgelegt, dass
-	 * dahinter nichts durchkommt - hier waere das schade um die
-	 * Brechung, fuer die der ganze Aufwand betrieben wurde.
-	 */
-	public static final int GLASS_TINT  = 0x8AF3EEEB;
-
-	/**
-	 * Helligkeitsband des Hintergrunds hinter dem Glas.
-	 *
-	 * Ohne das ist die Scheibe nachts schwarz und auf Schnee blendend -
-	 * und die Schrift darauf je nach Blickrichtung unlesbar. Die
-	 * Helligkeit wird deshalb in dieses Band gestaucht, der Farbton
-	 * bleibt. Walksy fuehrt dieselben zwei Werte als
-	 * OVER_WORLD_TONE_FLOOR und _CEILING mit 0,16 und 0,72.
-	 *
-	 * Hoeher als seine, weil mein Panel heller ist als seines.
-	 */
-	public static final float TONE_FLOOR = 0.30F;
-	public static final float TONE_CEIL  = 0.80F;
-
-	/**
-	 * Wie viel Farbe der Hintergrund hinter dem Glas behaelt.
-	 *
-	 * 1 waere die volle Farbe, 0 reines Grau. Mattiertes Glas streut das
-	 * Licht - es behaelt den Farbton, aber nicht dessen Kraft. Ohne
-	 * diesen Wert bleibt jede Unebenheit im Hintergrund als Farbfleck
-	 * stehen, und eine leere Flaeche sieht fleckig aus statt ruhig.
-	 */
-	public static final float SATURATION = 0.42F;
-
-	public static final float DENS      = 0.45F;
-	public static final float DENS_CARD = 0.22F;
-
-	public static final int EDGE_STRONG  = 0x3D000000;
-
-	/** Helle Gegenlinie aussen um EDGE_STRONG - hebt die Kante vom Glas ab. */
-	public static final int EDGE_LIGHT   = 0x52FFFFFF;
-
-	/** Haarlinie zwischen Bereichen. */
-	public static final int DIVIDER      = 0x2E3C3C43;
-	/** Platzhalter hinter einem fehlenden Mod-Icon. */
-	public static final int ICON_BG      = 0x2E000000;
-
-	// ------------------------------------------------------------------
-	// SCHALTER
-	//
-	// Das Blau ist aus Walksys Oberflaeche gemessen: 0,132,232. Es ist
-	// nicht meine Erfindung und auch nicht Minecrafts - es ist die
-	// Farbe, die jedes Betriebssystem fuer einen eingeschalteten Schalter
-	// benutzt. Genau deshalb erkennt man sie ohne Beschriftung.
-	//
-	// Die Mod-Icons sind warm und golden. Ein goldener Schalter wuerde
-	// sich darin verlieren; der Kontrast ist hier der Punkt.
-	// ------------------------------------------------------------------
-
-	/**
-	 * Warnfarbe fuer Hinweiszeilen.
-	 *
-	 * Nicht Minecrafts reines Rot: Das ist auf hellem Grund grell und
-	 * schlecht lesbar. Dieses Rot ist abgedunkelt und entspannt genug,
-	 * dass eine ganze Zeile darin lesbar bleibt.
-	 */
-	public static final int WARN         = 0xFFB3261E;
-
-	public static final int TOGGLE_ON    = 0xFF0084E8;
-	public static final int TOGGLE_OFF   = 0x33000000;
-	public static final int TOGGLE_KNOB  = 0xFFFFFFFF;
-
-	// --- Schrift -------------------------------------------------------
-	//
-	// Erst auf 85/50/35 Prozent Schwarz gesetzt, weil das Vorbild es so
-	// macht. Das war ein Fehler im Zusammenspiel: Dessen Flaechen sind
-	// kraeftiger, meine tragen zusaetzlich Glanz und Innenschatten. Grau
-	// auf hellem, leicht verschleiertem Grund ergibt Grau auf Grau.
-	//
-	// Lesbarkeit schlaegt Vorbildtreue.
-	public static final int TEXT         = 0xFF14141A;
-	public static final int TEXT_MUTED   = 0xC4000000;
-	public static final int TEXT_FAINT   = 0x99000000;
-
-	// --- Akzente -------------------------------------------------------
-	/** Warmes Gold, derselbe Ton wie im Mod-Icon. */
-	public static final int ACCENT       = 0xFFE8A33D;
-	/** Gruen fuer Microsoft-Konto. */
-	public static final int OK           = 0xE62E8B4F;
-	/** Grau fuer Offline. */
-	public static final int NEUTRAL      = 0xD98E8E93;
-
-	// --- Masse ---------------------------------------------------------
-	public static final int ROW_H        = 17;
-	public static final int CARD_H       = 52;
-	public static final int CARD_GAP     = 7;
-	/** Schmalste sinnvolle Kartenbreite, bestimmt die Spaltenzahl. */
-	public static final int CARD_MIN_W   = 150;
-	/** Ausweitung und Versatz des Fensterschattens. */
+	public static final int ROW_H = 17;
+	public static final int CARD_H = 52;
+	public static final int CARD_GAP = 7;
+	public static final int CARD_MIN_W = 150;
 	public static final int SHADOW_SPREAD = 8;
 	public static final int SHADOW_OFFSET = 3;
 }

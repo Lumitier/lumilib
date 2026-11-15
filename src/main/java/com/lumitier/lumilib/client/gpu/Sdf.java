@@ -50,8 +50,37 @@ public final class Sdf {
 
 	private Sdf() {}
 
-	/** Flaechenart - bestimmt die Staerken der Kanten. */
-	public enum Style { PANEL, CARD }
+	/**
+	 * Flaechenart - bestimmt die Staerken der Kanten.
+	 *
+	 * FLAT hat keine davon: keine Lichtkante, keine Fase, keinen
+	 * Innenschatten, keinen Glanz. Uebrig bleibt eine gefuellte Flaeche
+	 * mit runden Ecken und weicher Kante - genau das, was ein Schalter,
+	 * ein Reglergriff oder ein Statuspunkt braucht. Glas gehoert dort
+	 * nicht hin: eine Fase auf einem acht Pixel grossen Knopf ist kein
+	 * Material, sondern Dreck.
+	 */
+	public enum Style { PANEL, CARD, FLAT }
+
+	/**
+	 * Die Staerken der Kantenbaender einer Flaechenart.
+	 *
+	 * Sie gehen als Konstanten in den Shader und gelten damit fuer die
+	 * ganze Pipeline. Deshalb gibt es je Art eine Pipeline und hier
+	 * einen Satz Werte dazu, statt sieben Abfragen im Aufbau.
+	 */
+	private record Bands(int rim, int bevelLight, int bevelDark, int inner,
+	                     int spec, int lens, float gain) {}
+
+	private static Bands bands(Style style) {
+		return switch (style) {
+			case PANEL -> new Bands(Theme.RIM, Theme.BEVEL_LIGHT, Theme.BEVEL_DARK,
+				Theme.INNER, Theme.SPEC, Theme.LENS, Theme.DENS);
+			case CARD -> new Bands(Theme.RIM_CARD, Theme.BEVEL_LIGHT_CARD, Theme.BEVEL_DARK_CARD,
+				Theme.INNER_CARD, Theme.SPEC_CARD, Theme.LENS_CARD, Theme.DENS_CARD);
+			case FLAT -> new Bands(0, 0, 0, 0, 0, 0, 0.0F);
+		};
+	}
 
 	/** Die Glaspipeline - getrennt, weil sie als einzige einen Sampler hat. */
 	private static RenderPipeline glassPipeline;
@@ -59,6 +88,32 @@ public final class Sdf {
 
 	private static final Map<Style, RenderPipeline> PIPELINES = new EnumMap<>(Style.class);
 	private static boolean broken;
+
+	/**
+	 * Die Palette hat gewechselt - gebaute Pipelines wegwerfen.
+	 *
+	 * NOETIG, WEIL DIE FARBEN IM SHADER STEHEN:
+	 * Staerke der Lichtkante, der Fase, des Glanzes und das Tonband gehen
+	 * als Konstanten in den Shader, einmal beim Bauen. Eine Pipeline, die
+	 * mit den hellen Werten gebaut wurde, bleibt hell - sie liest Theme
+	 * nie wieder. Ohne dieses Wegwerfen waere der Umschalter ein Wechsel,
+	 * bei dem Schrift und Flaechen die Farbe tauschen und die Kanten nicht.
+	 *
+	 * WARUM WEGWERFEN UND NICHT ZWEI SAETZE VORHALTEN:
+	 * Weil ein Wechsel selten ist und ein zweiter Satz dauerhaft Speicher
+	 * auf der Grafikkarte kostet. Der naechste Aufruf baut neu, das merkt
+	 * man einmal und danach nicht mehr.
+	 *
+	 * Die Marken broken und glassBroken werden MITZURUECKGESETZT: Scheitert
+	 * ein Bau, soll die andere Palette es noch einmal versuchen duerfen -
+	 * es kann ja gerade an den Werten gelegen haben.
+	 */
+	public static void paletteChanged() {
+		PIPELINES.clear();
+		glassPipeline = null;
+		broken = false;
+		glassBroken = false;
+	}
 
 	/** Alphaanteil eines ARGB als 0..1 - so erwartet es GLSL. */
 	private static float alpha(int argb) {
@@ -74,29 +129,22 @@ public final class Sdf {
 			return cached;
 		}
 		try {
-			boolean card = style == Style.CARD;
+			Bands b = bands(style);
 			RenderPipeline built = RenderPipeline.builder()
 				.withLocation(Identifier.of(MOD_ID,
-					"pipeline/rounded_" + (card ? "card" : "panel")))
+					"pipeline/rounded_" + style.name().toLowerCase(java.util.Locale.ROOT)))
 				.withVertexShader(Identifier.of(MOD_ID, "core/rounded"))
 				.withFragmentShader(Identifier.of(MOD_ID, "core/rounded"))
 				// Staerken der Baender als Konstanten in den Shader.
-				.withShaderDefine("RIM_A",
-					alpha(card ? Theme.RIM_CARD : Theme.RIM))
-				.withShaderDefine("BEVEL_L",
-					alpha(card ? Theme.BEVEL_LIGHT_CARD : Theme.BEVEL_LIGHT))
-				.withShaderDefine("BEVEL_D",
-					alpha(card ? Theme.BEVEL_DARK_CARD : Theme.BEVEL_DARK))
-				.withShaderDefine("INNER_A",
-					alpha(card ? Theme.INNER_CARD : Theme.INNER))
+				.withShaderDefine("RIM_A", alpha(b.rim()))
+				.withShaderDefine("BEVEL_L", alpha(b.bevelLight()))
+				.withShaderDefine("BEVEL_D", alpha(b.bevelDark()))
+				.withShaderDefine("INNER_A", alpha(b.inner()))
 				// Glaskante - siehe Theme. SPEC und LENS sind Deckkraefte,
 				// EDGE_GAIN ist ein Faktor und kommt schon als Zahl.
-				.withShaderDefine("SPEC_A",
-					alpha(card ? Theme.SPEC_CARD : Theme.SPEC))
-				.withShaderDefine("LENS_A",
-					alpha(card ? Theme.LENS_CARD : Theme.LENS))
-				.withShaderDefine("EDGE_GAIN",
-					card ? Theme.DENS_CARD : Theme.DENS)
+				.withShaderDefine("SPEC_A", alpha(b.spec()))
+				.withShaderDefine("LENS_A", alpha(b.lens()))
+				.withShaderDefine("EDGE_GAIN", b.gain())
 				// MUSS gemeldet werden, sonst verweigert Minecraft die
 				// Pipeline mit "unknown and unsupported uniform" und
 				// zeichnet stillschweigend nichts. Die Namen muessen

@@ -19,7 +19,7 @@ import java.util.Map;
  * WELCHE ICONS HIER LIEGEN DUERFEN:
  * Nur eigene. Das Icon einer fremden Mod waere fremde Grafik, und die
  * weiterzugeben ist etwas anderes, als sie aus einem installierten Jar
- * anzuzeigen. Deshalb liegen hier genau die fuenf eigenen - alles Weitere
+ * anzuzeigen. Deshalb liegen hier genau die acht eigenen - alles Weitere
  * kommt zur Laufzeit aus dem Jar oder gar nicht.
  *
  * STAND DER KOPIE:

@@ -191,30 +191,77 @@ public final class ServerToast {
 			Surface.rimCard(ctx, 0, 0, w, CARD_H, Theme.RIM_CARD);
 		}
 
-		drawIcon(ctx, c.modId, PAD, (CARD_H - ICON) / 2);
-
-		int tx = PAD + ICON + GAP;
-		// Beide Zeilen in normaler Schrift, der Block aus beiden steht
-		// senkrecht in der Mitte der Karte - dieselben Masse wie in der
-		// Fassung, die du abgenommen hast.
+		// Der Block aus beiden Zeilen, SICHTBAR gemittet.
+		//
+		// Gemessen wird von der Oberkante der Versalien der ersten Zeile
+		// bis zur Schreiblinie der zweiten. Die Unterlaenge haengt
+		// absichtlich in die untere Luft - zaehlte sie mit, saesse eine
+		// Karte mit "Enabled again" anders als eine mit "Enabled".
+		//
+		// Und der Rand des Abstandsfeldes wird abgezogen: drawTop
+		// bekommt die Kastenkante, nicht die sichtbare Oberkante. Ohne
+		// das lag der Block rund zwei Pixel zu tief, und oben klaffte
+		// mehr Luft als unten.
 		int gap = Ui.advance(Ui.BODY_H, Ui.BODY_D, 3);
-		int block = gap + Ui.BODY_H;
-		int top = (CARD_H - block) / 2;
+		float capH = Ui.capHeightOf(Ui.TOP_BODY, false);
+		float visible = gap + capH;
+		float visTop = (CARD_H - visible) / 2.0F;
+		float topF = visTop - Ui.inkTopOffsetOf(Ui.TOP_BODY, false);
+		int top = (int) Math.floor(topF);
+
+		// Symbol auf die Mitte desselben Blocks. Bei richtig gemitteltem
+		// Text ist das zugleich die Mitte der Karte - aber gerechnet
+		// bleibt es richtig, auch wenn sich an den Zeilenmassen etwas
+		// aendert.
+		float iconYf = visTop + visible / 2.0F - ICON / 2.0F;
+		drawIcon(ctx, c.modId, PAD, iconYf);
+
+		// Der halbe Pixel wandert in die Matrix statt in die Rundung.
+		// Bei Schrift aus einem Abstandsfeld kostet das keine Schaerfe:
+		// Die Kante wird ohnehin in der Zielgroesse gerechnet.
+		int tx = PAD + ICON + GAP;
+		var textPose = ctx.getMatrices();
+		textPose.pushMatrix();
+		textPose.translate(0.0F, topF - top);
 		Ui.drawTop(ctx, tr, Ui.bold(c.title), tx, top, Ui.TOP_BODY, Theme.TEXT);
 		Ui.drawTop(ctx, tr, Ui.text(c.line), tx, top + gap, Ui.TOP_BODY,
 			c.warn ? Theme.WARN : Theme.OK);
+		textPose.popMatrix();
 	}
 
-	/** Icon der Mod, wie im Hub - fehlt es, bleibt die Stelle frei. */
-	private static void drawIcon(DrawContext ctx, String modId, int x, int y) {
-		Identifier icon = ModIcons.get(modId);
+	/**
+	 * Icon der Mod - erst das MITGELIEFERTE, dann das aus dem Jar.
+	 *
+	 * WARUM IN DIESER REIHENFOLGE:
+	 * Das Icon im Jar ist das der INSTALLIERTEN Fassung. Wer eine Mod
+	 * noch in einer aelteren Version laufen hat, bekam deshalb deren
+	 * altes Bild - und in einer Reihe von vier Karten untereinander
+	 * standen dann drei alte Bilder neben einem neuen. Die mitgelieferten
+	 * Icons sind dagegen bei allen eigenen Mods derselbe Satz.
+	 *
+	 * Fuer fremde Mods gibt es keines, da greift weiter das aus dem Jar.
+	 *
+	 * Die Hoehe kommt als Fliesskomma: Die richtige Stelle liegt selten
+	 * auf einem ganzen Pixel, und der Rest wird ueber die Matrix
+	 * geschoben statt weggerundet.
+	 */
+	private static void drawIcon(DrawContext ctx, String modId, int x, float yf) {
+		Identifier icon = CatalogIcons.get(modId);
+		if (icon == null) {
+			icon = ModIcons.get(modId);
+		}
 		if (icon == null) {
 			return;
 		}
+		int y = (int) Math.floor(yf);
 		int radius = Math.max(2, ICON / 4);
+		var pose = ctx.getMatrices();
+		pose.pushMatrix();
+		pose.translate(0.0F, yf - y);
 		if (!Sdf.roundedTexture(ctx, icon, x, y, ICON, ICON, radius, -1)) {
 			ctx.drawTexture(RenderPipelines.GUI_TEXTURED, icon,
 				x, y, 0.0F, 0.0F, ICON, ICON, ICON, ICON);
 		}
+		pose.popMatrix();
 	}
 }

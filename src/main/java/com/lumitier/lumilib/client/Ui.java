@@ -279,6 +279,147 @@ public final class Ui {
 	}
 
 	/**
+	 * Wo die SICHTBARE Mitte der Versalien liegt, wenn eine Zeile mit
+	 * drawCenteredLine auf centerY gesetzt wird.
+	 *
+	 * WOZU DAS GEBRAUCHT WIRD:
+	 * Ein Symbol neben einer Beschriftung wird als Kasten gesetzt, also
+	 * auf die Mitte seiner Zeile. Der Text wird nach Versalhoehe PLUS
+	 * Unterlaenge gemittet - das muss so sein, damit alle Zeilen einer
+	 * Liste dieselbe Schreiblinie bekommen, aber es verschiebt die
+	 * sichtbare Tinte nach oben: Die Unterlaenge zaehlt mit, auch wenn in
+	 * "LumiLib" gar keine vorkommt.
+	 *
+	 * Gemessen an der fertigen Ansicht waren das 0,75 Pixel - wenig, aber
+	 * bei GUI-Skalierung 3 sind es zwei echte Bildpunkte, und in einer
+	 * Liste aus acht Zeilen sieht man es.
+	 *
+	 * Statt den Versatz als Zahl einzutragen wird er hier gerechnet. Der
+	 * Rand des Abstandsfeldes haengt am Schnitt und an der Groesse - eine
+	 * eingetragene Zahl waere beim naechsten Atlas still falsch.
+	 */
+	public static float capCentreOf(int centerY, int capHeight, int descender,
+	                                int topOffset, boolean boldWeight) {
+		float top = centerY - (capHeight + descender + 1) / 2;
+		SdfFont f = SdfText.font(boldWeight);
+		float ink = top + (f == null ? 0.0F : f.inkTopOffset(pxFor(topOffset)));
+		return ink + capHeight / 2.0F;
+	}
+
+	/**
+	 * Wo das AUGE die Mitte einer Zeile sieht - nicht wo sie gerechnet liegt.
+	 *
+	 * DER UNTERSCHIED, UND WARUM ER ZAEHLT:
+	 * Ein Wort wie "LumiLib" ist fast nur Kleinbuchstaben. Seine sichtbare
+	 * Masse liegt im x-Band, der Versalblock reicht darueber hinaus. Setzt
+	 * man ein Symbol auf die Mitte des VERSALBLOCKS, steht es sichtbar zu
+	 * hoch, obwohl die Rechnung stimmt - gemessen bei 12,5 Pixeln 1,10
+	 * Pixel, und das sieht man.
+	 *
+	 * Bezug ist deshalb die Mitte zwischen Oberkante x und Schreiblinie.
+	 * Gerechnet aus der gemessenen x-Hoehe des Schnitts, nicht als fester
+	 * Zuschlag: Das Verhaeltnis von x-Hoehe zu Versalhoehe ist bei jedem
+	 * Schnitt anders, und eine eingetragene Zahl waere beim naechsten
+	 * Atlas still falsch.
+	 */
+	/**
+	 * Mitte des VERSALBLOCKS als Fliesskomma - Oberkante bis Schreiblinie.
+	 *
+	 * Fuer eine gefuellte Kachel daneben ist das der richtige Bezug: Setzt
+	 * man ihren Kasten darauf, ragt sie oben und unten gleich weit ueber
+	 * den Text hinaus. Ungleiche Ueberstaende sind genau das, was man als
+	 * "sitzt zu hoch" oder "zu tief" liest, auch wenn die Mitten stimmen.
+	 *
+	 * Der Wert liegt fast nie auf einem ganzen Pixel - bei 12,5 Pixeln
+	 * Schriftgroesse auf einem halben. Wer ihn rundet, hat genau den
+	 * halben Pixel Fehler, den man dann sieht.
+	 */
+	public static float capBlockCentreOf(int centerY, int capHeight, int descender,
+	                                     int topOffset, boolean boldWeight) {
+		float top = centerY - (capHeight + descender + 1) / 2;
+		SdfFont f = SdfText.font(boldWeight);
+		float px = pxFor(topOffset);
+		float ink = top + (f == null ? 0.0F : f.inkTopOffset(px));
+		float cap = f == null ? capHeight : f.capHeight(px);
+		return ink + cap / 2.0F;
+	}
+
+	/**
+	 * Mitte des Versalblocks einer Zeile, die mit drawTop gesetzt wird.
+	 *
+	 * ACHTUNG, DIE FALLE: Der Wert, den drawTop bekommt, ist NICHT die
+	 * sichtbare Oberkante des Buchstabens. Dazwischen liegt der Rand des
+	 * Abstandsfeldes - bei 12,5 Pixeln rund zwei. Wer von drawTops Wert
+	 * aus die halbe Versalhoehe nach unten geht, landet also zwei Pixel
+	 * zu hoch, und genau so hing das Symbol in der Hinweiszeile ueber dem
+	 * Text.
+	 *
+	 * Diese Fassung gilt fuer Zeilen, die OBEN angesetzt werden;
+	 * capBlockCentreOf gilt fuer Zeilen, die um eine Mitte gesetzt werden.
+	 */
+	/**
+	 * Rand des Abstandsfeldes bei dieser Staffel.
+	 *
+	 * Also der Abstand zwischen dem Wert, den drawTop bekommt, und der
+	 * SICHTBAREN Oberkante eines Grossbuchstabens. Bei 12,5 Pixeln rund
+	 * zwei. Wer einen mehrzeiligen Block mittig setzen will, muss ihn
+	 * abziehen - sonst sitzt der ganze Block um diesen Betrag zu tief
+	 * und oben klafft mehr Luft als unten.
+	 */
+	public static float inkTopOffsetOf(int topOffset, boolean boldWeight) {
+		SdfFont f = SdfText.font(boldWeight);
+		return f == null ? 0.0F : f.inkTopOffset(pxFor(topOffset));
+	}
+
+	public static float capBlockCentreBelow(int top, int topOffset, boolean boldWeight) {
+		SdfFont f = SdfText.font(boldWeight);
+		float px = pxFor(topOffset);
+		float ink = f == null ? 0.0F : f.inkTopOffset(px);
+		float cap = f == null ? 9.0F : f.capHeight(px);
+		return top + ink + cap / 2.0F;
+	}
+
+	public static float opticalCentreOf(int centerY, int capHeight, int descender,
+	                                    int topOffset, boolean boldWeight) {
+		float cap = capCentreOf(centerY, capHeight, descender, topOffset, boldWeight);
+		SdfFont f = SdfText.font(boldWeight);
+		if (f == null) {
+			return cap;
+		}
+		float px = pxFor(topOffset);
+		// Mitte x-Band liegt um die halbe Differenz tiefer als Mitte
+		// Versalblock - beide enden auf derselben Schreiblinie.
+		//
+		// Bezug ist die MITTE ZWISCHEN BEIDEN, nicht das x-Band selbst.
+		// Ein Wort hat Versalien UND Kleinbuchstaben; ganz auf das x-Band
+		// gesetzt haengt ein Symbol zu tief, ganz auf den Versalblock zu
+		// hoch. Gemessen bei 12,5 Pixeln: Versalblock 10,51, x-Band 11,55,
+		// Ziel 11,03.
+		return cap + (f.capHeight(px) - f.xHeight(px)) / 4.0F;
+	}
+
+	/**
+	 * centerY fuer drawCenteredLine, so dass der VERSALBLOCK mittig in
+	 * einem Rechteck sitzt.
+	 *
+	 * Unterschied zu drawCenteredIn: Dort wird nach der Tinte GENAU DIESER
+	 * Zeichenkette gemittet, hier nach der festen Versalhoehe. In einer
+	 * Liste muss es das zweite sein, sonst saesse jede Zeile je nach
+	 * Buchstaben anders.
+	 */
+	public static int lineCentreIn(int top, int height, int capHeight,
+	                               int descender, int topOffset, boolean boldWeight) {
+		SdfFont f = SdfText.font(boldWeight);
+		float px = pxFor(topOffset);
+		float cap = f == null ? capHeight : f.capHeight(px);
+		float ink = f == null ? 0.0F : f.inkTopOffset(px);
+		// Gewuenschte Oberkante der Tinte, dann zurueck auf das centerY,
+		// das drawCenteredLine daraus macht.
+		float capTop = top + (height - cap) / 2.0F;
+		return Math.round(capTop - ink + (capHeight + descender + 1) / 2.0F);
+	}
+
+	/**
 	 * Zeichnet EINE Zeile genau mittig in ein Rechteck.
 	 *
 	 * UNTERSCHIED ZU drawCenteredLine, und warum es beide gibt:
@@ -340,6 +481,20 @@ public final class Ui {
 		return w >= 0.0F ? Math.round(w) : tr.getWidth(boldWeight ? bold(s) : text(s));
 	}
 
+	/**
+	 * Gemessene Versalhoehe einer Staffel.
+	 *
+	 * Fuer alles, was neben Text sitzt und auf dessen Mitte will: Die
+	 * Konstanten BODY_H und Co. sind gerundete Entwurfsmasse, der Schnitt
+	 * hat die echte Hoehe. Beides unterscheidet sich hier um 0,15 Pixel -
+	 * und genau solche Reste haben die Symbole in der Sidebar daneben
+	 * sitzen lassen.
+	 */
+	public static float capHeightOf(int topOffset, boolean boldWeight) {
+		SdfFont f = SdfText.font(boldWeight);
+		return f == null ? 9.0F : f.capHeight(pxFor(topOffset));
+	}
+
 	/** Fliesstext, normal. */
 	public static int width(TextRenderer tr, String s) {
 		return width(tr, s, 12.5F, false);
@@ -373,6 +528,18 @@ public final class Ui {
 	 * statt zerhackt zu werden; abgeschnitten wird es dann beim Zeichnen.
 	 */
 	public static java.util.List<String> wrap(TextRenderer tr, String s, int maxWidth) {
+		return wrap(tr, s, maxWidth, 12.5F, false);
+	}
+
+	/**
+	 * Dasselbe, aber in einer anderen Staffel.
+	 *
+	 * Noetig, weil kleiner Text schmaler baut: Wer einen Untertext mit der
+	 * Breite des Fliesstextes umbricht, laesst rechts Platz liegen und
+	 * bekommt eine Zeile mehr als noetig.
+	 */
+	public static java.util.List<String> wrap(TextRenderer tr, String s, int maxWidth,
+	                                          float px, boolean boldWeight) {
 		java.util.List<String> out = new java.util.ArrayList<>();
 		if (s == null || s.isEmpty() || maxWidth <= 0) {
 			return out;
@@ -384,7 +551,7 @@ public final class Ui {
 				continue;
 			}
 			String probe = line + " " + word;
-			if (width(tr, probe) <= maxWidth) {
+			if (width(tr, probe, px, boldWeight) <= maxWidth) {
 				line.setLength(0);
 				line.append(probe);
 			} else {
