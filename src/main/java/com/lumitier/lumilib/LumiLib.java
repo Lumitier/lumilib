@@ -86,6 +86,27 @@ public final class LumiLib {
 
 		/** LumiLib-Knopf im Haupt- und Pausemenue. */
 		public boolean menuButton = true;
+
+		/**
+		 * Bewegung im Hub: Oeffnen, Schliessen, Seitenwechsel, Hover,
+		 * Schalter.
+		 *
+		 * Abschaltbar, weil Bewegung nicht jedem guttut - und weil man
+		 * beim Aufnehmen von Videos manchmal lieber harte Schnitte hat.
+		 */
+		public boolean animations = true;
+
+		/**
+		 * Eigene Reihenfolge der Mods in der Seitenleiste, per Ziehen
+		 * festgelegt.
+		 *
+		 * Nur die nicht angepinnten. Angepinnte stehen in "pinned" in ihrer
+		 * eigenen Reihenfolge - so bleibt "Anpinnen heisst: steht oben"
+		 * wahr, egal wie man den Rest sortiert. Fehlt eine Mod hier, steht
+		 * sie hinter allen, die hier stehen, in der Reihenfolge des
+		 * Katalogs.
+		 */
+		public java.util.List<String> order = new java.util.ArrayList<>();
 	}
 
 	public static volatile Config cfg = new Config();
@@ -99,6 +120,9 @@ public final class LumiLib {
 		// einen Absturz, der sich sonst erst beim Nutzer zeigt.
 		if (cfg.pinned == null) {
 			cfg.pinned = new java.util.ArrayList<>();
+		}
+		if (cfg.order == null) {
+			cfg.order = new java.util.ArrayList<>();
 		}
 		save();
 	}

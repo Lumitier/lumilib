@@ -93,8 +93,22 @@ record HubEntry(
 		// Mod anmeldete - und LumiLib landete zwischen Item Drop und
 		// Perpetual Snow. Jetzt entscheidet allein die Reihenfolge im
 		// Katalog, und Angepinnte stehen davor.
+		//
+		// Angepinnte nach der REIHENFOLGE DES ANPINNENS, nicht als ein
+		// gemeinsamer Block: Sonst waere die zuletzt angepinnte Mod je nach
+		// Katalogplatz irgendwo zwischen den anderen gelandet, und das
+		// Anpinnen haette sichtbar nichts getan.
 		out.sort(Comparator
-			.comparingInt((HubEntry h) -> LumiLib.cfg.pinned.contains(h.id()) ? 0 : 1)
+			.comparingInt((HubEntry h) -> {
+				int i = LumiLib.cfg.pinned.indexOf(h.id());
+				return i < 0 ? Integer.MAX_VALUE : i;
+			})
+			// Danach die eigene Reihenfolge aus dem Ziehen. Wer nie gezogen
+			// hat, hat eine leere Liste - dann gilt wie bisher der Katalog.
+			.thenComparingInt(h -> {
+				int i = LumiLib.cfg.order.indexOf(h.id());
+				return i < 0 ? Integer.MAX_VALUE : i;
+			})
 			.thenComparingInt(h -> LumiCatalog.order(h.id()))
 			.thenComparing(h -> h.name().getString(), String.CASE_INSENSITIVE_ORDER));
 		return out;

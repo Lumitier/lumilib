@@ -40,6 +40,132 @@ final class SettingsList {
 	/** Beim Wechsel der Mod-Seite aufrufen. */
 	static void reset() {
 		ColourPopup.close();
+		openIndex = -1;
+		openList = null;
+		openPage = null;
+	}
+
+	// ------------------------------------------------------------------
+	// Unterseiten
+	// ------------------------------------------------------------------
+
+	/**
+	 * Der aufgeschlagene Eintrag einer Liste, oder null.
+	 *
+	 * WARUM STATISCH UND NICHT AM FENSTER: Genauso macht es ColourPopup
+	 * schon. SettingsList hat ueberhaupt keinen Zustand am Objekt - es
+	 * gibt kein Objekt, die Klasse besteht nur aus statischen Methoden.
+	 * Ein Feld am Hub waere konsequenter, haette aber bedeutet, es durch
+	 * jede der acht Methoden durchzureichen.
+	 *
+	 * ZURUECKGESETZT WIRD BEIM SEITENWECHSEL (siehe reset oben) - sonst
+	 * stuende beim Oeffnen der naechsten Mod noch die Unterseite der
+	 * vorigen offen.
+	 */
+	private static SettingsPage.ListRow openList;
+
+	/**
+	 * Die NUMMER des aufgeschlagenen Eintrags, nicht der Eintrag selbst.
+	 *
+	 * DAS IST WICHTIG: Die Eintraege kommen aus einem Supplier und werden
+	 * bei jedem Bild neu gebaut - mitsamt neuer Lambdas in ihren Zeilen.
+	 * Zwei Aufrufe liefern also nie gleiche Objekte, auch wenn inhaltlich
+	 * dasselbe darin steht. Haette ich den Eintrag selbst gemerkt, waere
+	 * jeder Vergleich damit fehlgeschlagen und die Unterseite im naechsten
+	 * Bild wieder zugeklappt.
+	 *
+	 * Ueber die Nummer wird der Eintrag stattdessen jedes Mal frisch
+	 * geholt. Das ist nebenbei auch richtiger: Aendert die Mod einen Wert
+	 * von aussen, steht er sofort da.
+	 */
+	private static int openIndex = -1;
+
+	/**
+	 * Die aufgeschlagene Unterseite, einmal gebaut.
+	 *
+	 * NICHT bei jedem Bild neu: Eine Seite zu bauen legt Standardwerte in
+	 * einer Tabelle ab, und ein neues Objekt je Bild haette bedeutet,
+	 * dass jeder Klick auf einen anderen Zeilenobjekt trifft als der, den
+	 * das vorige Bild gezeichnet hat.
+	 */
+	private static SettingsPage openPage;
+
+	/**
+	 * Die Seite, die gerade gilt.
+	 *
+	 * In einer Unterseite muessen Zuruecksetzen, Standardwerte und die
+	 * Breite der Bedienelemente von DEREN Seitenobjekt kommen, nicht von
+	 * der Mod-Seite darunter - sonst kennt die Abfrage die Zeilen nicht,
+	 * die gerade zu sehen sind.
+	 */
+	private static SettingsPage effective(SettingsPage page) {
+		return openPage != null ? openPage : page;
+	}
+
+	/** Ist gerade eine Unterseite aufgeschlagen? */
+	/** Welche Unterseite offen ist, -1 fuer keine. Der Hub erkennt daran einen Seitenwechsel. */
+	static int subPage() {
+		return openIndex;
+	}
+
+	static boolean inSubPage() {
+		return openIndex >= 0;
+	}
+
+	/** Eine Ebene zurueck. Gibt false, wenn es nichts zuzuklappen gab. */
+	static boolean back() {
+		if (openIndex < 0) {
+			return false;
+		}
+		openIndex = -1;
+		openList = null;
+		openPage = null;
+		return true;
+	}
+
+	/**
+	 * Die Abschnitte, die gerade zu sehen sind.
+	 *
+	 * DER KERN DER UNTERSEITEN, und der Grund, warum sie fast nichts
+	 * gekostet haben: Eine Unterseite ist kein zweiter Zeichenweg,
+	 * sondern ein zusammengebauter Abschnitt mit gewoehnlichen Zeilen.
+	 * Zeichnen, Messen und Treffer laufen danach durch genau denselben
+	 * Code wie die Hauptseite.
+	 *
+	 * Die Zurueck-Zeile ist eine gewoehnliche Action. Auch dafuer gibt es
+	 * also keinen Sonderfall.
+	 */
+	private static java.util.List<SettingsPage.Section> sections(SettingsPage page) {
+		if (openIndex < 0 || openList == null) {
+			return page.sections();
+		}
+		java.util.List<SettingsPage.ListRow.Entry> entries = openList.entries().get();
+		// Wurde die Liste von aussen kuerzer, zeigt die Unterseite Regler,
+		// die auf nichts mehr wirken. Dann zurueck zur Hauptseite.
+		if (openIndex >= entries.size()) {
+			back();
+			return page.sections();
+		}
+		SettingsPage.ListRow.Entry entry = entries.get(openIndex);
+		if (entry.page() == null) {
+			// Kann nur passieren, wenn sich die Liste unter der offenen
+			// Unterseite geaendert hat. Zurueck statt Absturz.
+			back();
+			return page.sections();
+		}
+		if (openPage == null) {
+			openPage = entry.page().get();
+		}
+		// Die Zurueck-Zeile steht in einem eigenen Abschnitt davor. Sie
+		// gehoert bewusst NICHT zur Unterseite der Mod - sonst muesste
+		// jede Mod sie selbst einbauen und koennte sie vergessen.
+		java.util.List<SettingsPage.Section> out = new java.util.ArrayList<>();
+		out.add(new SettingsPage.Section(entry.label(), java.util.List.of(
+			new SettingsPage.Action(
+				net.minecraft.text.Text.translatable("lumilib.list.back"), null,
+				SettingsList::back))));
+		out.addAll(openPage.sections());
+		return out;
 	}
 
 	/**
@@ -51,7 +177,22 @@ final class SettingsList {
 	 * verlaesst - und genau das tut er beim Ziehen staendig.
 	 */
 	record Hit(SettingsPage.Row row, int x, int y, int w, int h,
-	           int right, boolean reset) {}
+	           int right, boolean reset, int part) {
+
+		/**
+		 * part sagt bei einer ListRow, WELCHE ihrer Unterzeilen getroffen
+		 * wurde: -1 die Kopfzeile mit dem Plus, sonst die Nummer des
+		 * Eintrags. Bei jeder anderen Bauform ist es -1.
+		 *
+		 * Noetig, weil eine ListRow mehrere Zeilen hoch ist, aber als EINE
+		 * Zeile durch walk laeuft - und activate() nur die x-Lage der Maus
+		 * bekommt, nicht die y-Lage.
+		 */
+		Hit(SettingsPage.Row row, int x, int y, int w, int h,
+		    int right, boolean reset) {
+			this(row, x, y, w, h, right, reset, -1);
+		}
+	}
 
 	/**
 	 * Rechte Kante der Bedienelemente.
@@ -62,7 +203,7 @@ final class SettingsList {
 	 */
 	static int controlRight(SettingsPage page, int x, int w) {
 		return x + w - Metrics.SET_INSET
-			- (page.canResetAny() ? Metrics.RESET_SLOT : 0);
+			- (effective(page).canResetAny() ? Metrics.RESET_SLOT : 0);
 	}
 
 	/** Linke Kante des Zuruecksetzen-Knopfs. */
@@ -123,10 +264,40 @@ final class SettingsList {
 	// ------------------------------------------------------------------
 
 	/** Abstand zweier umgebrochener Zeilen, Oberkante zu Oberkante. */
+	/**
+	 * Hoehe einer Eintragszeile in einer Liste.
+	 *
+	 * 30 Pixel, und zwar fuer ALLE Eintraege gleich - auch die
+	 * einzeiligen. Zwei Hoehen je nach Inhalt waeren ein zweites Mass an
+	 * jeder der sieben Stellen, die hier rechnen (Hoehe der Zeile, Lage
+	 * des naechsten Eintrags, Treffer, Ueberfahren, Muelleimer), und die
+	 * Trefferpruefung muesste die Eintraege durchzaehlen statt zu teilen.
+	 * Ein Mass fuer alle: 22 Pixel Fach plus vier Luft oben und unten,
+	 * und zwei Textzeilen passen genauso hinein.
+	 */
+	private static final int LIST_ENTRY_H = 30;
+
+	/** Kantenlaenge eines Item-Bildes. Von Minecraft fest vorgegeben. */
+	private static final int ITEM = 16;
+
+	/**
+	 * Kantenlaenge des Fachs hinter dem Item.
+	 *
+	 * WARUM UEBERHAUPT EIN FACH: Minecrafts Item-Bilder haben keinen
+	 * eigenen Rand und keine einheitliche Silhouette - eine Elytra ist
+	 * flach und breit, ein Schwert duenn und schraeg. Nebeneinander in
+	 * einer Liste fransen sie aus und die Textkante wirkt zerfasert. Ein
+	 * Fach dahinter gibt jedem Bild dieselbe Flaeche, so wie im Inventar.
+	 */
+	private static final int SLOT = 22;
+
 	private static final int NOTE_LEAD = 13;
 	/** Kantenlaenge des Zeichens - gerade, damit es auf die Textmitte passt. */
 	private static final int NOTE_ICON = 12;
 	private static final int NOTE_GAP = 7;
+
+	private static final Identifier PLUS = Identifier.of(LumiLib.MOD_ID, "plus");
+	private static final Identifier TRASH = Identifier.of(LumiLib.MOD_ID, "trash");
 
 	private static final Identifier NOTE_SIGN =
 		Identifier.of(com.lumitier.lumilib.LumiLib.MOD_ID, "info");
@@ -190,6 +361,13 @@ final class SettingsList {
 	}
 
 	private static int rowHeight(SettingsPage.Row row, int w) {
+		if (row instanceof SettingsPage.ListRow l) {
+			// Kopfzeile plus je Eintrag eine. Eine leere Liste ist nur
+			// die Kopfzeile - und das ist richtig so: Wer noch nichts
+			// hinzugefuegt hat, braucht keinen leeren Kasten, sondern
+			// den Plus-Knopf.
+			return Metrics.SET_ROW_H + l.entries().get().size() * LIST_ENTRY_H;
+		}
 		if (row instanceof SettingsPage.Note n) {
 			// Eine Zeile ist genau so hoch wie jede andere. Erst ab der
 			// zweiten waechst sie - und zwar um genau eine Zeile, nicht
@@ -282,8 +460,11 @@ final class SettingsList {
 	private static void walk(SettingsPage page, int x, int y, int w, String query,
 	                         GroupVisitor onGroup, RowVisitor onRow) {
 		boolean first = true;
-		for (SettingsPage.Section section : page.sections()) {
-			java.util.List<SettingsPage.Row> rows = visible(section, query);
+		// In einer Unterseite wird NICHT gesucht: Die Suche gehoert zur
+		// Mod-Seite, und ein Filter ueber drei Zeilen hilft niemandem.
+		String q = openIndex < 0 ? query : null;
+		for (SettingsPage.Section section : sections(page)) {
+			java.util.List<SettingsPage.Row> rows = visible(section, q);
 			if (rows.isEmpty()) {
 				continue;
 			}
@@ -361,9 +542,13 @@ final class SettingsList {
 			drawNote(ctx, tr, n, x, y, w, h);
 			return;
 		}
+		if (row instanceof SettingsPage.ListRow l) {
+			drawList(ctx, tr, page, l, x, y, w, mouseX, mouseY);
+			return;
+		}
 
 		boolean hover = Draw.inside(mouseX, mouseY, x, y, w, h);
-		boolean slot = page.canResetAny();
+		boolean slot = effective(page).canResetAny();
 		int right = controlRight(page, x, w);
 
 		// Hover nur bei Zeilen, die als GANZES ein Knopf sind. Bei einem
@@ -400,16 +585,16 @@ final class SettingsList {
 
 		if (row instanceof SettingsPage.Toggle t) {
 			drawToggle(ctx, right - Metrics.TOGGLE_W,
-				y + (h - Metrics.TOGGLE_H) / 2, t.getter().getAsBoolean());
+				y + (h - Metrics.TOGGLE_H) / 2, t, t.getter().getAsBoolean());
 		} else if (row instanceof SettingsPage.Slider sl) {
 			drawSlider(ctx, tr, sl, y, h, right);
 		} else if (row instanceof SettingsPage.Colour c) {
 			drawSwatch(ctx, tr, c, y, h, right);
 		}
 
-		if (page.canReset(row)) {
+		if (effective(page).canReset(row)) {
 			int rx = resetX(x, w);
-			drawReset(ctx, rx, y, h, page.isDefault(row),
+			drawReset(ctx, rx, y, h, effective(page).isDefault(row),
 				Draw.inside(mouseX, mouseY, rx - 4, y, Metrics.RESET + 8, h));
 		}
 	}
@@ -423,6 +608,104 @@ final class SettingsList {
 	 * kann nicht mehr auf einen Blick sehen, welche Zeilen ueberhaupt
 	 * einen Standardwert haben.
 	 */
+	/**
+	 * Eine Liste: Kopfzeile mit Plus, darunter je Eintrag eine Zeile.
+	 *
+	 * AUFBAU EINER EINTRAGSZEILE, von links nach rechts:
+	 *
+	 *     SET_INSET  Bild des Items (16)  ROW_ICON_GAP  Name  ...  Muelleimer
+	 *
+	 * Das Bild wird mit drawItem gezeichnet, also von Minecraft selbst -
+	 * damit sieht ein Item hier genauso aus wie im Inventar, mit allem,
+	 * was dazugehoert: Modelle fuer Bloecke, Faerbung fuer Leder,
+	 * Verzauberungsschimmer. Nachgebaut waere nichts davon da.
+	 */
+	private static void drawList(DrawContext ctx, TextRenderer tr, SettingsPage page,
+	                             SettingsPage.ListRow l,
+	                             int x, int y, int w, int mouseX, int mouseY) {
+		int right = controlRight(page, x, w);
+
+		// --- Kopfzeile ---
+		Ui.drawCenteredIn(ctx, tr, Ui.text(l.label().getString()),
+			x + Metrics.SET_INSET, y, Metrics.SET_ROW_H,
+			Ui.BODY_H, Ui.BODY_D, Ui.TOP_BODY, Theme.TEXT);
+
+		if (l.onAdd() != null) {
+			boolean can = l.canAdd();
+			int bx = right - Metrics.ROW_ICON;
+			int by = y + (Metrics.SET_ROW_H - Metrics.ROW_ICON) / 2;
+			boolean over = can && Draw.inside(mouseX, mouseY,
+				bx - 4, by - 4, Metrics.ROW_ICON + 8, Metrics.ROW_ICON + 8);
+			Surface.icon(ctx, PLUS, bx, by, Metrics.ROW_ICON,
+				can ? (over ? Theme.ACCENT : Theme.TEXT) : Theme.TEXT_FAINT);
+		}
+
+		// --- Eintraege ---
+		java.util.List<SettingsPage.ListRow.Entry> entries = l.entries().get();
+		int ey = y + Metrics.SET_ROW_H;
+		for (int i = 0; i < entries.size(); i++) {
+			SettingsPage.ListRow.Entry e = entries.get(i);
+			boolean hover = Draw.inside(mouseX, mouseY, x, ey, w, LIST_ENTRY_H);
+			if (hover) {
+				Draw.roundedRect(ctx, x + Metrics.SET_PAD, ey,
+					w - Metrics.SET_PAD * 2, LIST_ENTRY_H, 6, Theme.ROW_HOVER);
+			}
+
+			int ix = x + Metrics.SET_INSET;
+			if (e.icon() != null) {
+				// Erst das Fach, dann das Bild mittig hinein.
+				int sy = ey + (LIST_ENTRY_H - SLOT) / 2;
+				Draw.roundedRect(ctx, ix, sy, SLOT, SLOT, 5, Theme.FIELD);
+				ctx.drawItem(e.icon(), ix + (SLOT - ITEM) / 2, sy + (SLOT - ITEM) / 2);
+			}
+			int tx = ix + (e.icon() == null ? 0 : SLOT + Metrics.ROW_ICON_GAP);
+			int tw = right - tx - Metrics.ROW_ICON - 8;
+
+			boolean twoLine = e.sub() != null && !e.sub().getString().isEmpty();
+			String text = Ui.fit(tr, e.label().getString(), tw);
+
+			// Einzeilig sitzt der Name mittig, zweizeilig teilen sich Name
+			// und Unterzeile die Hoehe. Dieselbe Rechnung, nur ein anderes
+			// Rechteck - kein zweiter Zeichenweg.
+			int nameTop = twoLine ? ey + 2 : ey;
+			int nameH = twoLine ? LIST_ENTRY_H / 2 : LIST_ENTRY_H;
+			Ui.drawCenteredIn(ctx, tr, Ui.text(text), tx, nameTop, nameH,
+				Ui.BODY_H, Ui.BODY_D, Ui.TOP_BODY,
+				e.muted() ? Theme.TEXT_FAINT : Theme.TEXT);
+
+			if (twoLine) {
+				String sub = Ui.fitSmall(tr, e.sub().getString(), tw);
+				Ui.drawCenteredIn(ctx, tr, Ui.small(sub),
+					tx, ey + LIST_ENTRY_H / 2, LIST_ENTRY_H / 2 - 2,
+					Ui.SMALL_H, Ui.SMALL_D, Ui.TOP_SMALL,
+					e.muted() ? Theme.TEXT_FAINT : Theme.TEXT_MUTED);
+			}
+
+			if (e.muted()) {
+				// Durchgestrichen UND blass: Ein Eintrag, der gerade nicht
+				// wirkt, soll auf einen Blick vom Rest zu unterscheiden
+				// sein. Blass allein reicht nicht - das sieht nach
+				// "abgeschaltet" aus, nicht nach "wird verdeckt".
+				//
+				// NUR DIE ERSTE ZEILE: Der Strich gehoert zum Namen. Durch
+				// beide Zeilen gezogen saehe der Eintrag nach geloescht
+				// aus, nicht nach verdeckt.
+				int line = nameTop + nameH / 2;
+				Draw.hLine(ctx, tx, line, Ui.width(tr, text), Theme.TEXT_FAINT);
+			}
+
+			if (l.onRemove() != null) {
+				int bx = right - Metrics.ROW_ICON;
+				int by = ey + (LIST_ENTRY_H - Metrics.ROW_ICON) / 2;
+				boolean over = Draw.inside(mouseX, mouseY,
+					bx - 4, by - 4, Metrics.ROW_ICON + 8, Metrics.ROW_ICON + 8);
+				Surface.icon(ctx, TRASH, bx, by, Metrics.ROW_ICON,
+					over ? Theme.WARN : Theme.TEXT_FAINT);
+			}
+			ey += LIST_ENTRY_H;
+		}
+	}
+
 	private static void drawReset(DrawContext ctx, int x, int y, int h,
 	                              boolean atDefault, boolean hover) {
 		int colour = atDefault
@@ -552,18 +835,52 @@ final class SettingsList {
 	 * Pille in einer Farbe und ein weisser Kreis. Draw zeichnet das ohne
 	 * Umweg, ohne Rueckfallebene und in jeder Groesse gleich.
 	 */
-	private static void drawToggle(DrawContext ctx, int x, int y, boolean on) {
+	private static void drawToggle(DrawContext ctx, int x, int y, Object key, boolean on) {
 		int h = Metrics.TOGGLE_H;
 		int w = Metrics.TOGGLE_W;
-		Draw.roundedRect(ctx, x, y, w, h, h / 2,
-			on ? Theme.TOGGLE_ON : Theme.TOGGLE_OFF);
+
+		// Stand des Schalters, 0 = aus, 1 = an. Laeuft dem Wert hinterher,
+		// statt zu springen - so sieht man, dass der Klick angekommen ist.
+		// Ein Array je Schalter, einmal angelegt; danach kostet es nichts.
+		Knob st = KNOBS.computeIfAbsent(key, x0 -> new Knob(on ? 1.0F : 0.0F));
+		long now = Anim.now();
+		float dt = st.last == 0L ? 16.0F : Math.min(100.0F, now - st.last);
+		st.last = now;
+		st.value = Anim.approach(st.value, on ? 1.0F : 0.0F, dt, Anim.SLIDE_MS);
+		float k = st.value;
+
+		Draw.roundedRect(ctx, x, y, w, h, h / 2, Anim.mix(Theme.TOGGLE_OFF, Theme.TOGGLE_ON, k));
 
 		int r = (h - Metrics.TOGGLE_INSET * 2) / 2;
 		int cy = y + h / 2;
-		int cx = on
-			? x + w - Metrics.TOGGLE_INSET - r
-			: x + Metrics.TOGGLE_INSET + r;
-		Draw.dot(ctx, cx, cy, r, Theme.TOGGLE_KNOB);
+		int left = x + Metrics.TOGGLE_INSET + r;
+		int span = w - Metrics.TOGGLE_INSET * 2 - r * 2;
+		float cx = left + span * k;
+		int ix = (int) Math.floor(cx);
+		var pose = ctx.getMatrices();
+		pose.pushMatrix();
+		pose.translate(cx - ix, 0.0F);
+		Draw.dot(ctx, ix, cy, r, Theme.TOGGLE_KNOB);
+		pose.popMatrix();
+	}
+
+	/**
+	 * Stand jedes Schalters, nach Zeile.
+	 *
+	 * IdentityHashMap: Die Zeilen einer Seite sind feste Objekte, die die
+	 * Seite zwischenspeichert. Zwei Schalter mit gleichem Namen auf
+	 * verschiedenen Seiten bleiben so getrennt.
+	 */
+	private static final java.util.Map<Object, Knob> KNOBS = new java.util.IdentityHashMap<>();
+
+	private static final class Knob {
+		float value;
+		/** Zeitpunkt des letzten Bilds, als long - ein float waere dafuer zu ungenau. */
+		long last;
+
+		Knob(float value) {
+			this.value = value;
+		}
 	}
 
 	// ------------------------------------------------------------------
@@ -586,9 +903,22 @@ final class SettingsList {
 			// Der Knopf liegt INNERHALB der Zeile. Wird er nicht zuerst
 			// geprueft, schnappt die Zeile den Klick weg und schaltet den
 			// Schalter um, statt zurueckzusetzen.
-			boolean onReset = page.canReset(row)
+			boolean onReset = effective(page).canReset(row)
 				&& Draw.inside(mx, my, resetX(rx, rw) - 4, ry, Metrics.RESET + 8, rh);
-			found[0] = new Hit(row, rx, ry, rw, rh, controlRight(page, rx, rw), onReset);
+
+			// Bei einer Liste zaehlt zusaetzlich, WELCHE Unterzeile
+			// getroffen wurde. Hier ist die y-Lage der Maus bekannt,
+			// in activate() nicht mehr - deshalb wird sie hier in eine
+			// Nummer uebersetzt und mitgegeben.
+			int part = -1;
+			if (row instanceof SettingsPage.ListRow) {
+				double below = my - ry - Metrics.SET_ROW_H;
+				if (below >= 0) {
+					part = (int) (below / LIST_ENTRY_H);
+				}
+			}
+			found[0] = new Hit(row, rx, ry, rw, rh,
+				controlRight(page, rx, rw), onReset, part);
 		});
 		return found[0];
 	}
@@ -611,7 +941,7 @@ final class SettingsList {
 			// ohnehin schon auf Standard stand. Dann ist der Klick zwar
 			// folgenlos, aber verbraucht - er darf nicht an die Zeile
 			// darunter durchfallen.
-			page.reset(h.row());
+			effective(page).reset(h.row());
 			return true;
 		}
 		if (h.row() instanceof SettingsPage.Toggle t) {
@@ -620,6 +950,8 @@ final class SettingsList {
 			a.onClick().run();
 		} else if (h.row() instanceof SettingsPage.Slider s) {
 			setFromMouse(s, h, mx);
+		} else if (h.row() instanceof SettingsPage.ListRow l) {
+			return activateList(l, h, mx);
 		} else if (h.row() instanceof SettingsPage.Colour c) {
 			// Der Waehler wird vom Hub geoeffnet - nur der kennt die
 			// Fenstergroesse und weiss, ob er noch nach unten passt.
@@ -628,6 +960,68 @@ final class SettingsList {
 			return false;                      // Hinweiszeile: nichts zu tun
 		}
 		page.saveNow();
+		return true;
+	}
+
+	/**
+	 * Klick in eine Liste.
+	 *
+	 * Die Knopfflaechen sind um vier Pixel groesser als das Bild. Ein
+	 * Muelleimer von zwoelf Pixeln ist sonst zu klein zum Treffen,
+	 * besonders weil danach etwas verschwindet - ein Fehlklick waere
+	 * teuer.
+	 *
+	 * REIHENFOLGE: Erst die Knoepfe, dann die Zeile. Sonst schnappt die
+	 * Zeile den Klick weg und klappt die Unterseite auf, statt zu
+	 * loeschen.
+	 */
+	private static boolean activateList(SettingsPage.ListRow l, Hit h, double mx) {
+		boolean onButton = mx >= h.right() - Metrics.ROW_ICON - 4
+			&& mx <= h.right() + 4;
+
+		if (h.part() < 0) {
+			if (onButton && l.canAdd()) {
+				l.onAdd().run();
+				return true;
+			}
+			return false;
+		}
+
+		java.util.List<SettingsPage.ListRow.Entry> entries = l.entries().get();
+		if (h.part() >= entries.size()) {
+			return false;
+		}
+		if (onButton && l.onRemove() != null) {
+			l.onRemove().accept(h.part());
+			return true;
+		}
+
+		SettingsPage.ListRow.Entry entry = entries.get(h.part());
+
+		// Eintrag mit eigener Handlung: ausfuehren und hierbleiben.
+		if (entry.onClick() != null) {
+			entry.onClick().run();
+			return true;
+		}
+
+		// Ohne Unterseite ist der Eintrag reine Anzeige.
+		if (entry.page() == null) {
+			return false;
+		}
+
+		// KEINE ZWEITE EBENE: Es gibt genau einen Platz fuer eine
+		// aufgeschlagene Unterseite. Stuende hier eine Liste INNERHALB einer
+		// Unterseite, wuerde ein Klick die aeussere lautlos durch die innere
+		// ersetzen - und der Zurueck-Knopf landete an der falschen Stelle.
+		// Lieber nichts tun: Listen in Unterseiten gehoeren ueber onClick
+		// bedient, nicht ueber eine weitere Ebene.
+		if (openIndex >= 0) {
+			return false;
+		}
+
+		openList = l;
+		openIndex = h.part();
+		openPage = null;
 		return true;
 	}
 

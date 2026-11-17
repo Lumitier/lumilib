@@ -132,7 +132,8 @@ public final class HubSound {
 	private static boolean ducked;
 
 	/**
-	 * Schaltet die Spielmusik stumm, solange der Hub zu sehen ist.
+	 * Schaltet die Spielmusik stumm, solange ein LumiLib-Fenster zu
+	 * sehen ist - Hub, Item-Waehler, Verzauberungswaehler.
 	 *
 	 * WIE DAS GEHT, OHNE DIE EINSTELLUNGEN DES SPIELERS ANZUFASSEN:
 	 * SoundManager.setVolume(Kategorie, Wert) schreibt NICHT in die
@@ -165,13 +166,33 @@ public final class HubSound {
 	 * volumes ist privat und hat keinen Lesezugriff.
 	 */
 	public static void updateMusic(MinecraftClient client) {
-		boolean inHub = client.currentScreen instanceof LumiHubScreen;
+		boolean inHub = client.currentScreen instanceof LumiScreen;
+
+		// Die eigene Klangschleife haengt am selben Zustand: Sie laeuft in
+		// JEDEM LumiLib-Fenster, nicht nur im Hub. Vorher startete der Hub
+		// sie und stoppte sie beim Verlassen - wer vom Hub in den Item-
+		// Waehler oder ins Resource Pack Studio ging, stand in der Stille.
+		// Gesteuert nur beim Wechsel, nicht jeden Tick: Von einem
+		// LumiLib-Fenster ins naechste aendert sich nichts, die Schleife
+		// laeuft einfach durch.
+		if (inHub != loopWanted) {
+			loopWanted = inHub;
+			if (inHub) {
+				start();
+			} else {
+				stop();
+			}
+		}
+
 		if (inHub == ducked) {
 			return;
 		}
 		client.getSoundManager().setVolume(SoundCategory.MUSIC, inHub ? 0.0F : 1.0F);
 		ducked = inHub;
 	}
+
+	/** Ob gerade ein LumiLib-Fenster offen ist, die Schleife also laufen soll. */
+	private static boolean loopWanted;
 
 	/** Einmal beim Start - ohne Eintrag im Verzeichnis kennt Minecraft den Klang nicht. */
 	public static void init() {
@@ -266,7 +287,7 @@ public final class HubSound {
 	public static void settingChanged() {
 		if (LumiLib.cfg.hubSoundVolume <= 0) {
 			stop();
-		} else if (MinecraftClient.getInstance().currentScreen instanceof LumiHubScreen) {
+		} else if (MinecraftClient.getInstance().currentScreen instanceof LumiScreen) {
 			start();
 		}
 	}

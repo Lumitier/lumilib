@@ -19,10 +19,12 @@ import net.minecraft.entity.player.SkinTextures;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * Der LumiLib-Hub: Uebersicht aller angemeldeten Mods.
@@ -47,7 +49,7 @@ import java.util.UUID;
  * 5. Eingabesignaturen in 1.21.11: keyPressed(KeyInput),
  *    mouseClicked(Click, boolean).
  */
-public class LumiHubScreen extends ScaledScreen {
+public class LumiHubScreen extends ScaledScreen implements LumiScreen {
 
 	/** Wuerfel fuer Mods ohne eigenes Icon - GUI-Sprite, also ohne Pfad. */
 	private static final Identifier ICON_MOD_DEFAULT =
@@ -102,6 +104,64 @@ public class LumiHubScreen extends ScaledScreen {
 	private final SearchField search = new SearchField();
 	private List<HubEntry> visible = List.of();
 
+	// ------------------------------------------------------------------
+	// Bewegung (siehe Anim)
+	// ------------------------------------------------------------------
+
+	/** Wann der Hub aufging. 0 = noch nie gezeichnet. */
+	private long openedAt;
+	/** Wann Schliessen begann, sonst -1. Waehrenddessen nimmt der Hub nichts mehr an. */
+	private long closingAt = -1L;
+	/** Zeit seit dem letzten Bild, fuer alles, was auf ein Ziel zulaeuft. */
+	private long lastFrame;
+	private float frameDt = 16.0F;
+	/** Welche Seite rechts steht - wechselt sie, faehrt die neue herein. */
+	private String pageKey = "";
+	private long pageAt;
+	/**
+	 * Hover-Stand je Zeile und Karte, nach Position in der Liste.
+	 *
+	 * Nach POSITION und nicht nach Mod: Ein Array fester Groesse kostet
+	 * pro Bild nichts. Verschiebt sich die Liste, blendet eine Zeile eben
+	 * einmal kurz falsch - das ist bei Hover keinem Auge einen Map-Eintrag
+	 * pro Mod wert.
+	 */
+	private final float[] rowHover = new float[256];
+	private final float[] rowShift = new float[256];
+	private final float[] cardHover = new float[256];
+	private float allModsHover;
+	private float updatesHover;
+
+	// ------------------------------------------------------------------
+	// Ziehen in der Seitenleiste
+	// ------------------------------------------------------------------
+
+	/** Zeile, auf der die Maus gedrueckt wurde. Erst beim Loslassen klar: Klick oder Ziehen. */
+	private String pressId;
+	private int pressIndex;
+	private int pressY;
+	/** Abstand vom Zeilenanfang zum Griffpunkt, damit die Zeile nicht springt. */
+	private int pressOffset;
+	private boolean rowDragging;
+	/** Ab so viel Bewegung ist es kein Klick mehr. */
+	private static final int DRAG_SLOP = 4;
+
+	// ------------------------------------------------------------------
+	// Updates
+	// ------------------------------------------------------------------
+
+	/** Rechts steht die Update-Liste statt Uebersicht oder Mod-Seite. */
+	private boolean showUpdates;
+	private List<ModMenuUpdates.Item> updateItems = List.of();
+	private long updatesFetchedAt;
+	/** Lage der Knoepfe der Update-Seite, fuer Klicks. */
+	private final int[] updBtnX = new int[64];
+	private final int[] updBtnY = new int[64];
+	private final int[] updBtnW = new int[64];
+	private int updBtnCount;
+	private int updMenuX, updMenuY, updMenuW;
+	private boolean updMenuShown;
+
 	public LumiHubScreen(Screen parent) {
 		super(Text.translatable("lumilib.hub.title"));
 		this.parent = parent;
@@ -121,9 +181,8 @@ public class LumiHubScreen extends ScaledScreen {
 		this.px = (this.width - this.pw) / 2;
 		this.py = (this.height - this.ph) / 2;
 
-		// Idempotent: init laeuft auch bei jeder Groessenaenderung, start
-		// fragt vorher den Soundmanager.
-		HubSound.start();
+		// Die Klangschleife startet nicht mehr hier, sondern in
+		// HubSound.updateMusic - fuer jedes LumiLib-Fenster gleich.
 
 		// Der Einzelklang ist NICHT idempotent, deshalb die Sperre. Er
 		// laeuft gleichzeitig mit dem Start der Flaeche, nicht davor:
@@ -131,6 +190,7 @@ public class LumiHubScreen extends ScaledScreen {
 		if (!this.greeted) {
 			this.greeted = true;
 			HubSound.playOpen();
+			this.openedAt = Anim.now();
 		}
 
 		int pad = Metrics.PAD;
@@ -163,31 +223,46 @@ public class LumiHubScreen extends ScaledScreen {
 		return false;
 	}
 
+	/** Der Hub bewegt nur seine Flaeche, nicht den ganzen Bildschirm - siehe renderScaled. */
+	@Override
+	protected boolean animatesItself() {
+		return true;
+	}
+
 	@Override
 	public void close() {
+		// Zweites Escape waehrend des Schliessens: sofort weg. Wer zweimal
+		// drueckt, will nicht auf eine Bewegung warten.
+		if (this.closingAt >= 0L) {
+			finishClose();
+			return;
+		}
 		// Hier und nicht in removed(): removed() laeuft auch, wenn man
 		// auf die Einstellungsseite einer Mod wechselt, und dort waere
 		// ein Schliessklang falsch - geschlossen wird ja nichts. close()
 		// ist der Weg nach draussen, ueber Escape oder den Zurueckknopf.
 		HubSound.playClose();
+		if (Anim.enabled()) {
+			// Der eigentliche Wechsel kommt in renderScaled, wenn die
+			// Bewegung durch ist.
+			this.closingAt = Anim.now();
+			return;
+		}
+		finishClose();
+	}
+
+	private void finishClose() {
+		this.closingAt = -1L;
 		if (this.client != null) {
 			this.client.setScreen(this.parent);
 		}
 	}
 
-	/**
-	 * Bildschirm wird abgeloest - Hintergrundton aus.
-	 *
-	 * HIER UND NICHT IN close(): close laeuft nur beim Schliessen mit
-	 * Escape. Wer von hier aus Mod Menu oeffnet oder ins Spiel
-	 * zurueckkehrt, geht an close vorbei - und der Ton liefe weiter,
-	 * ohne dass noch ein Fenster da waere, das ihn erklaert.
-	 */
-	@Override
-	public void removed() {
-		HubSound.stop();
-		super.removed();
-	}
+	// Kein removed() mehr, das den Hintergrundton stoppt: Das macht jetzt
+	// HubSound.updateMusic jeden Tick anhand dessen, was wirklich auf dem
+	// Bildschirm ist. Der Hub selbst muss dafuer nichts tun - und wer von
+	// hier in den Item-Waehler oder ins Resource Pack Studio geht, hoert
+	// die Schleife einfach weiter.
 
 	private List<HubEntry> filtered() {
 		List<HubEntry> all = HubEntry.all();
@@ -218,12 +293,55 @@ public class LumiHubScreen extends ScaledScreen {
 		// sich selbst bricht.
 		Backdrop.capture();
 
+		long now = Anim.now();
+		this.frameDt = this.lastFrame == 0L ? 16.0F : Math.min(100.0F, now - this.lastFrame);
+		this.lastFrame = now;
+
+		// Schliessen fertig? Dann jetzt wechseln und nichts mehr zeichnen -
+		// ein letztes Bild des Hubs ueber dem naechsten Bildschirm waere ein
+		// sichtbares Flackern.
+		if (this.closingAt >= 0L && Anim.progress(this.closingAt, Anim.CLOSE_MS) >= 1.0F) {
+			finishClose();
+			return;
+		}
+
 		this.visible = filtered();
 		this.lastMouseY = mouseY;
 		updateDrag(mouseX);
+		updateRowDrag(mouseY);
+
+		// WIE WEIT DER HUB DA IST: 0 = weg, 1 = ganz da. Oeffnen und
+		// Schliessen sind dieselbe Bewegung in zwei Richtungen.
+		float in = Anim.easeOut(Anim.progress(this.openedAt, Anim.OPEN_MS));
+		float out = this.closingAt >= 0L
+			? Anim.easeIn(Anim.progress(this.closingAt, Anim.CLOSE_MS)) : 0.0F;
+		float shown = in * (1.0F - out);
 
 		maybeBlur(ctx);
-		ctx.fill(0, 0, this.width, this.height, Theme.SCRIM);
+		ctx.fill(0, 0, this.width, this.height, Anim.alpha(Theme.SCRIM, shown));
+
+		// Die Flaeche waechst aus 96 % und kommt 8 Pixel von unten. Mehr
+		// nicht: Bei mehr Weg wirkt ein Menue verspielt, bei weniger sieht
+		// man nichts. Skaliert um die Mitte der Flaeche, nicht um die Ecke -
+		// sonst zieht sie nach links oben.
+		var pose = ctx.getMatrices();
+		pose.pushMatrix();
+		if (shown < 1.0F) {
+			float k = 0.96F + 0.04F * shown;
+			float mx = px + pw / 2.0F;
+			float my = py + ph / 2.0F;
+			pose.translate(mx, my + (1.0F - shown) * 8.0F);
+			pose.scale(k, k);
+			pose.translate(-mx, -my);
+		}
+		try {
+			renderPanel(ctx, mouseX, mouseY);
+		} finally {
+			pose.popMatrix();
+		}
+	}
+
+	private void renderPanel(DrawContext ctx, int mouseX, int mouseY) {
 
 		Surface.shadowPanel(ctx, px, py, pw, ph,
 			Theme.SHADOW_SPREAD, Theme.SHADOW_OFFSET, Theme.SHADOW);
@@ -346,12 +464,17 @@ public class LumiHubScreen extends ScaledScreen {
 	private void drawNavRow(DrawContext ctx, int x, int y, int w,
 	                        int mouseX, int mouseY, boolean selected,
 	                        Identifier icon, HubEntry entry, String label,
-	                        boolean boldLabel, boolean dimmed, boolean header) {
+	                        boolean boldLabel, boolean dimmed, boolean header,
+	                        float hoverAmt) {
 		boolean hover = Draw.inside(mouseX, mouseY, x - 4, y, w + 8, Metrics.ROW_H);
 		if (selected) {
 			Surface.row(ctx, x - 4, y, w + 8, Metrics.ROW_H, Theme.ROW_SELECTED);
-		} else if (hover) {
-			Surface.row(ctx, x - 4, y, w + 8, Metrics.ROW_H, Theme.ROW_HOVER);
+		} else if (hoverAmt > 0.01F) {
+			// Blendet ein und aus statt umzuschalten. Faehrt man schnell
+			// ueber die Liste, zieht ein kurzer Schweif mit - so sieht man,
+			// wo die Maus war.
+			Surface.row(ctx, x - 4, y, w + 8, Metrics.ROW_H,
+				Anim.alpha(Theme.ROW_HOVER, hoverAmt));
 		}
 		// Symbol auf die SICHTBARE Mitte der Beschriftung, nicht auf die
 		// Mitte der Zeile.
@@ -459,6 +582,161 @@ public class LumiHubScreen extends ScaledScreen {
 		}
 	}
 
+	// ------------------------------------------------------------------
+	// Ziehen in der Seitenleiste
+	// ------------------------------------------------------------------
+
+	/** Keine Zeile in der Hand - dann gilt Hover wie immer. */
+	private boolean rowPressFree() {
+		return !this.rowDragging;
+	}
+
+	/**
+	 * Wie viele Zeilen oben angepinnt sind.
+	 *
+	 * Die Sortierung stellt alle Angepinnten nach vorn, also reicht es,
+	 * von oben zu zaehlen, bis die erste nicht angepinnte kommt.
+	 */
+	private int pinnedCount() {
+		int k = 0;
+		for (HubEntry e : this.visible) {
+			if (!LumiLib.cfg.pinned.contains(e.id())) {
+				break;
+			}
+			k++;
+		}
+		return k;
+	}
+
+	/** Wie viele Mod-Zeilen in die Seitenleiste passen. */
+	private int fittingRows() {
+		int fit = (sidebarListBottom() - modRowsTop()) / Metrics.ROW_H;
+		return Math.min(this.visible.size(), Math.max(0, fit));
+	}
+
+	/**
+	 * Erste und letzte Position der Gruppe von Zeile i.
+	 *
+	 * ZWEI GRUPPEN, und gezogen wird nur innerhalb: Angepinnte bleiben
+	 * oben, der Rest darunter. Sonst hiesse "angepinnt" nichts mehr - eine
+	 * Mod koennte darueber stehen, ohne angepinnt zu sein.
+	 */
+	private int groupStart(int i) {
+		int k = pinnedCount();
+		return i < k ? 0 : k;
+	}
+
+	private int groupEnd(int i) {
+		int k = pinnedCount();
+		return i < k ? k - 1 : fittingRows() - 1;
+	}
+
+	/** Oberkante der gezogenen Zeile, festgehalten in ihrer Gruppe. */
+	private int dragRowY(int mouseY, int top, int limit) {
+		int lo = top + groupStart(this.pressIndex) * Metrics.ROW_H;
+		int hi = top + groupEnd(this.pressIndex) * Metrics.ROW_H;
+		int y = mouseY - this.pressOffset;
+		return Math.max(lo, Math.min(hi, y));
+	}
+
+	/** Wohin die gezogene Zeile fiele, wenn man jetzt losliesse. */
+	private int dropIndex(int mouseY) {
+		int top = modRowsTop();
+		int gy = dragRowY(mouseY, top, 0);
+		int idx = Math.round((gy - top) / (float) Metrics.ROW_H);
+		return Math.max(groupStart(this.pressIndex), Math.min(groupEnd(this.pressIndex), idx));
+	}
+
+	/**
+	 * Entscheidet jedes Bild, ob aus einem Druck ein Ziehen wird.
+	 *
+	 * Erst nach DRAG_SLOP Pixeln: Eine Hand zittert beim Klicken, und ein
+	 * Klick, der versehentlich ein Ziehen wird, oeffnet die Mod nicht.
+	 * Losgelassen ausserhalb des Fensters kommt kein Ereignis an - deshalb
+	 * fragt diese Stelle die Maustaste selbst ab.
+	 */
+	private void updateRowDrag(int mouseY) {
+		if (this.pressId == null) {
+			return;
+		}
+		if (!mouseDown()) {
+			releaseRow(mouseY);
+			return;
+		}
+		if (!this.rowDragging && Math.abs(mouseY - this.pressY) > DRAG_SLOP && canDragRows()) {
+			this.rowDragging = true;
+		}
+	}
+
+	/**
+	 * Ziehen geht nur ohne Suche: Gefiltert fehlen Zeilen, und dann waere
+	 * unklar, wohin die verschobene Mod in der vollen Liste gehoert.
+	 */
+	private boolean canDragRows() {
+		if (!this.search.text().trim().isEmpty()) {
+			return false;
+		}
+		int i = this.pressIndex;
+		return i >= 0 && i < fittingRows() && groupEnd(i) > groupStart(i);
+	}
+
+	/** Maus los: entweder war es ein Klick (Mod oeffnen) oder ein Ziehen. */
+	private void releaseRow(int mouseY) {
+		String id = this.pressId;
+		boolean dragged = this.rowDragging;
+		int from = this.pressIndex;
+		int to = dragged ? dropIndex(mouseY) : from;
+		this.pressId = null;
+		this.rowDragging = false;
+		if (id == null) {
+			return;
+		}
+		if (!dragged) {
+			this.selectedId = id;
+			this.showUpdates = false;
+			// Oben anfangen. Ohne das uebernimmt die neue Seite
+			// den Rollstand der Uebersicht und startet mittendrin.
+			this.scroll = 0;
+			return;
+		}
+		if (to != from) {
+			commitOrder(from, to);
+		}
+		// Die Zeilen stehen jetzt schon da, wo sie hin sollten. Liefe der
+		// Versatz weiter, glitten sie erst zurueck und dann wieder hin.
+		java.util.Arrays.fill(this.rowShift, 0.0F);
+	}
+
+	/** Neue Reihenfolge speichern - fuer die Gruppe, in der gezogen wurde. */
+	private void commitOrder(int from, int to) {
+		int k = pinnedCount();
+		boolean pinnedGroup = from < k;
+		int gs = pinnedGroup ? 0 : k;
+		int ge = pinnedGroup ? k : this.visible.size();
+
+		List<String> ids = new ArrayList<>();
+		for (int i = gs; i < ge; i++) {
+			ids.add(this.visible.get(i).id());
+		}
+		String moved = ids.remove(from - gs);
+		ids.add(Math.max(0, Math.min(ids.size(), to - gs)), moved);
+
+		// Was gerade nicht sichtbar ist (etwa ausgeblendete fehlende Mods),
+		// behaelt seinen Platz hinten in der Liste, statt verloren zu gehen.
+		List<String> old = pinnedGroup ? LumiLib.cfg.pinned : LumiLib.cfg.order;
+		for (String id : old) {
+			if (!ids.contains(id)) {
+				ids.add(id);
+			}
+		}
+		if (pinnedGroup) {
+			LumiLib.cfg.pinned = ids;
+		} else {
+			LumiLib.cfg.order = ids;
+		}
+		LumiLib.save();
+	}
+
 	/**
 	 * X der Stecknadel - EINE Quelle fuer Zeichnen und Klicken.
 	 *
@@ -532,11 +810,22 @@ public class LumiHubScreen extends ScaledScreen {
 		// zweite eigene Abfrage waere nur unnoetiger Netzverkehr.
 		int updates = updateCount();
 		this.updatesRowY = y;
-		this.updatesClickable = updates > 0;
+		// Klickbar, sobald Mod Menu da ist - auch ohne Updates. Dann sagt
+		// die Seite eben, dass alles aktuell ist. Vorher war die Zeile bei
+		// null tot, und man wusste nicht, ob ueberhaupt geprueft wurde.
+		this.updatesClickable = FabricLoader.getInstance().isModLoaded("modmenu");
 
-		boolean updHover = this.updatesClickable
-			&& mouseX >= x && mouseX < x + w
+		boolean updHover = this.updatesClickable && this.rowPressFree()
+			&& mouseX >= x - 4 && mouseX < x + w + 4
 			&& mouseY >= y && mouseY < y + Metrics.ROW_H;
+		this.updatesHover = Anim.approach(this.updatesHover, updHover ? 1.0F : 0.0F,
+			this.frameDt, Anim.HOVER_MS);
+		if (this.showUpdates) {
+			Surface.row(ctx, x - 4, y, w + 8, Metrics.ROW_H, Theme.ROW_SELECTED);
+		} else if (this.updatesHover > 0.01F) {
+			Surface.row(ctx, x - 4, y, w + 8, Metrics.ROW_H,
+				Anim.alpha(Theme.ROW_HOVER, this.updatesHover));
+		}
 
 		Text label;
 		int colour;
@@ -546,10 +835,10 @@ public class LumiHubScreen extends ScaledScreen {
 			colour = updHover ? Theme.TEXT : Theme.TEXT_MUTED;
 		} else {
 			label = Text.translatable("lumilib.updates.none");
-			colour = Theme.TEXT_FAINT;
+			colour = updHover ? Theme.TEXT_MUTED : Theme.TEXT_FAINT;
 		}
 		Ui.drawTop(ctx, this.textRenderer, Ui.of(label),
-			x, y + 3, Ui.TOP_BODY, colour);
+			x, y + 3, Ui.TOP_BODY, this.showUpdates ? Theme.TEXT : colour);
 
 		if (updates > 0) {
 			// Punkt rechts aussen statt eines Pfeils - ein Pfeil sieht nach
@@ -570,23 +859,66 @@ public class LumiHubScreen extends ScaledScreen {
 		// zurueck zur Uebersicht - und die Sidebar wird damit zu dem,
 		// was sie ohnehin aussah: eine Navigation.
 		y = allModsRowY();
-		int isz = Metrics.ROW_ICON;
-		drawNavRow(ctx, x, y, w, mouseX, mouseY, selectedId == null,
+		boolean allHover = rowPressFree()
+			&& Draw.inside(mouseX, mouseY, x - 4, y, w + 8, Metrics.ROW_H);
+		this.allModsHover = Anim.approach(this.allModsHover, allHover ? 1.0F : 0.0F,
+			this.frameDt, Anim.HOVER_MS);
+		drawNavRow(ctx, x, y, w, mouseX, mouseY, selectedId == null && !showUpdates,
 			Identifier.of(LumiLib.MOD_ID, "loader"), null,
 			Text.translatable("lumilib.content.all_mods").getString(),
-			true, false, true);
+			true, false, true, this.allModsHover);
 		Draw.hLine(ctx, x, allModsDividerY(), w, Theme.DIVIDER);
 
 		y = modRowsTop();
 		int limit = sidebarListBottom();
-		for (HubEntry e : visible) {
+		int top = y;
+
+		// ZIEHEN: Die gezogene Zeile haengt an der Maus, die anderen ihrer
+		// Gruppe ruecken zur Seite, wohin sie fallen wuerde. Gezeichnet
+		// wird sie zuletzt, damit sie ueber allem liegt.
+		int from = this.rowDragging ? this.pressIndex : -1;
+		int to = this.rowDragging ? dropIndex(mouseY) : -1;
+		HubEntry dragged = from >= 0 && from < visible.size() ? visible.get(from) : null;
+
+		int n = Math.min(visible.size(), this.rowHover.length);
+		for (int i = 0; i < n; i++) {
+			HubEntry e = visible.get(i);
 			if (y + Metrics.ROW_H > limit) {
 				break;
 			}
-			drawNavRow(ctx, x, y, w, mouseX, mouseY,
-				e.id().equals(selectedId), null, e, e.name().getString(), false,
-				e.state() == HubEntry.State.MISSING, false);
+			float shiftTarget = 0.0F;
+			if (dragged != null && i != from) {
+				if (from < to && i > from && i <= to) {
+					shiftTarget = -Metrics.ROW_H;
+				} else if (from > to && i < from && i >= to) {
+					shiftTarget = Metrics.ROW_H;
+				}
+			}
+			this.rowShift[i] = Anim.approach(this.rowShift[i], shiftTarget,
+				this.frameDt, Anim.SLIDE_MS);
+			int ry = y + Math.round(this.rowShift[i]);
+
+			boolean hover = dragged == null && rowPressFree()
+				&& Draw.inside(mouseX, mouseY, x - 4, y, w + 8, Metrics.ROW_H);
+			this.rowHover[i] = Anim.approach(this.rowHover[i], hover ? 1.0F : 0.0F,
+				this.frameDt, Anim.HOVER_MS);
+
+			if (i != from) {
+				drawNavRow(ctx, x, ry, w, mouseX, mouseY,
+					!showUpdates && e.id().equals(selectedId), null, e, e.name().getString(),
+					false, e.state() == HubEntry.State.MISSING, false, this.rowHover[i]);
+			}
 			y += Metrics.ROW_H;
+		}
+
+		if (dragged != null) {
+			int gy = dragRowY(mouseY, top, limit);
+			// Angehoben: Schatten darunter, Auswahlfarbe dahinter. So ist
+			// klar, welche Zeile man gerade in der Hand hat.
+			Surface.shadowCard(ctx, x - 4, gy, w + 8, Metrics.ROW_H, 4, 2, Theme.SHADOW_CARD);
+			drawNavRow(ctx, x, gy, w, -1, -1, true, null, dragged,
+				dragged.name().getString(), false,
+				dragged.state() == HubEntry.State.MISSING, false, 0.0F);
 		}
 
 		if (visible.isEmpty()) {
@@ -637,7 +969,38 @@ public class LumiHubScreen extends ScaledScreen {
 	}
 
 	private void renderContent(DrawContext ctx, int mouseX, int mouseY) {
+		// SEITENWECHSEL: Die neue Seite faehrt 10 Pixel von rechts herein.
+		// Wenig Weg, kurz - genug, damit man sieht, dass etwas Neues kam,
+		// zu wenig, um beim schnellen Durchklicken zu stoeren.
+		// Auch eine aufgeschlagene Unterseite (etwa eine Regel in Item Drop
+		// Tweaks) ist ein Seitenwechsel und faehrt herein.
+		String key = this.showUpdates ? "#updates"
+			: (this.selectedId == null ? "" : this.selectedId + "/" + SettingsList.subPage());
+		if (!key.equals(this.pageKey)) {
+			this.pageKey = key;
+			this.pageAt = Anim.now();
+		}
+		float pg = Anim.easeOut(Anim.progress(this.pageAt, Anim.PAGE_MS));
+		var pose = ctx.getMatrices();
+		pose.pushMatrix();
+		pose.translate((1.0F - pg) * 10.0F, 0.0F);
+		try {
+			renderContentInner(ctx, mouseX, mouseY);
+		} finally {
+			pose.popMatrix();
+		}
+	}
+
+	private void renderContentInner(DrawContext ctx, int mouseX, int mouseY) {
 		this.settingsBtnShown = false;
+		this.updMenuShown = false;
+		this.updBtnCount = 0;
+		if (this.showUpdates) {
+			this.search.setFocused(false);
+			this.pageSearch.setFocused(false);
+			renderUpdates(ctx, mouseX, mouseY);
+			return;
+		}
 		HubEntry open = selected();
 		// Auf einer Mod-Seite gibt es kein Suchfeld - dann auch keinen
 		// Fokus, sonst frisst es weiter Tastendruecke.
@@ -653,6 +1016,148 @@ public class LumiHubScreen extends ScaledScreen {
 			return;
 		}
 		renderOverview(ctx, mouseX, mouseY);
+	}
+
+	/**
+	 * Die Update-Seite: welche Mod, welche Version jetzt, welche neu.
+	 *
+	 * DIE ZAHLEN KOMMEN VON MOD MENU. Es prueft beim Start auf Modrinth;
+	 * eine zweite eigene Abfrage waere nur doppelter Netzverkehr. Ohne Mod
+	 * Menu gibt es die Seite nicht - die Zeile in der Seitenleiste ist dann
+	 * nicht anklickbar.
+	 *
+	 * Neu geholt alle zwei Sekunden, nicht jedes Bild: Mod Menu traegt seine
+	 * Ergebnisse nach und nach ein, waehrend die Seite offen ist.
+	 */
+	private void renderUpdates(DrawContext ctx, int mouseX, int mouseY) {
+		long now = Anim.now();
+		if (now - this.updatesFetchedAt > 2000L) {
+			this.updatesFetchedAt = now;
+			try {
+				this.updateItems = ModMenuUpdates.list();
+			} catch (Throwable t) {
+				this.updateItems = List.of();
+			}
+		}
+
+		int headY = cy + 10;
+		Ui.drawTop(ctx, this.textRenderer,
+			Ui.titleOf(Text.translatable("lumilib.updates.title")), cx, headY,
+			Ui.TOP_TITLE, Theme.TEXT);
+
+		// Rechts oben: der Weg zu Mod Menu, fuer alles, was diese Seite
+		// nicht kann - Changelogs, Filter, Updates abschalten.
+		String menuLabel = Text.translatable("lumilib.updates.open_mod_menu").getString();
+		int bw = Ui.widthBold(this.textRenderer, menuLabel) + 28;
+		int bh = 22;
+		int bx = cx + cw - bw;
+		int by = cy + (Metrics.TITLE_H - bh) / 2;
+		boolean overMenu = Draw.inside(mouseX, mouseY, bx, by, bw, bh);
+		int menuFill = overMenu ? Theme.CARD_HOVER : Theme.CARD;
+		if (!Surface.glassCard(ctx, bx, by, bw, bh, menuFill)) {
+			Surface.card(ctx, bx, by, bw, bh, menuFill);
+		}
+		Ui.drawCenteredLine(ctx, this.textRenderer, Ui.bold(menuLabel),
+			bx + 14, by + bh / 2, Ui.BODY_H, Ui.BODY_D, Ui.TOP_BODY,
+			overMenu ? Theme.TEXT : Theme.TEXT_MUTED);
+		this.updMenuX = bx;
+		this.updMenuY = by;
+		this.updMenuW = bw;
+		this.updMenuShown = true;
+
+		List<ModMenuUpdates.Item> items = this.updateItems;
+		int rowH = 40;
+		int gap = Metrics.CARD_GAP;
+		this.contentHeight = items.isEmpty() ? 0 : items.size() * (rowH + gap) - gap;
+		int maxScroll = Math.max(0, contentHeight - (listBottom - listTop));
+		if (scroll > maxScroll) {
+			scroll = maxScroll;
+		}
+
+		if (items.isEmpty()) {
+			Ui.drawTop(ctx, this.textRenderer,
+				Ui.text(Ui.fit(this.textRenderer,
+					Text.translatable("lumilib.updates.all_current").getString(), cw)),
+				cx, listTop + 4, Ui.TOP_BODY, Theme.TEXT_MUTED);
+			Ui.drawTop(ctx, this.textRenderer,
+				Ui.small(Ui.fitSmall(this.textRenderer,
+					Text.translatable("lumilib.updates.source").getString(), cw)),
+				cx, listTop + 4 + Ui.advance(Ui.BODY_H, Ui.BODY_D, 2), Ui.TOP_SMALL,
+				Theme.TEXT_FAINT);
+			return;
+		}
+
+		ctx.enableScissor(cx, listTop, cx + cw, listBottom);
+		Sdf.clip(new ScreenRect(cx, listTop, cw, listBottom - listTop));
+		String dlLabel = Text.translatable("lumilib.updates.download").getString();
+		int p = Metrics.CARD_PAD;
+		for (int i = 0; i < items.size(); i++) {
+			ModMenuUpdates.Item it = items.get(i);
+			int ry = listTop + i * (rowH + gap) - scroll;
+			if (ry + rowH < listTop || ry > listBottom) {
+				continue;
+			}
+			boolean hover = Draw.inside(mouseX, mouseY, cx, ry, cw, rowH)
+				&& mouseY >= listTop && mouseY < listBottom;
+			float amt = hover ? 1.0F : 0.0F;
+			if (i < this.cardHover.length) {
+				this.cardHover[i] = Anim.approach(this.cardHover[i], amt,
+					this.frameDt, Anim.HOVER_MS);
+				amt = this.cardHover[i];
+			}
+			int fill = Anim.mix(Theme.CARD, Theme.CARD_HOVER, amt);
+			if (!Surface.glassCard(ctx, cx, ry, cw, rowH, fill)) {
+				Surface.card(ctx, cx, ry, cw, rowH, fill);
+			}
+
+			// Rechts der Knopf, falls Mod Menu einen Link kennt.
+			int right = cx + cw - p;
+			if (!it.link().isEmpty() && i < this.updBtnX.length) {
+				int dw = Ui.widthBold(this.textRenderer, dlLabel) + 20;
+				int dh = 18;
+				int dx = right - dw;
+				int dy = ry + (rowH - dh) / 2;
+				boolean overDl = Draw.inside(mouseX, mouseY, dx, dy, dw, dh)
+					&& mouseY >= listTop && mouseY < listBottom;
+				Surface.row(ctx, dx, dy, dw, dh, overDl ? Theme.FIELD_HOVER : Theme.FIELD);
+				Ui.drawCenteredLine(ctx, this.textRenderer, Ui.bold(dlLabel),
+					dx + 10, dy + dh / 2, Ui.BODY_H, Ui.BODY_D, Ui.TOP_BODY,
+					overDl ? Theme.TEXT : Theme.TEXT_MUTED);
+				this.updBtnX[i] = dx;
+				this.updBtnY[i] = dy;
+				this.updBtnW[i] = dw;
+				this.updBtnCount = i + 1;
+				right = dx - 10;
+			} else if (i < this.updBtnX.length) {
+				this.updBtnW[i] = 0;
+				this.updBtnCount = i + 1;
+			}
+
+			int tx = cx + p;
+			int tw = right - tx;
+			int top = ry + (rowH - (Ui.advance(Ui.BODY_H, Ui.BODY_D, 2) + Ui.SMALL_H)) / 2;
+			String name = Ui.fitBold(this.textRenderer, it.name(), tw);
+			Ui.drawTop(ctx, this.textRenderer, Ui.bold(name), tx, top, Ui.TOP_BODY, Theme.TEXT);
+
+			// Vorabversionen bekommen ihren Kanal dazu, in Akzentfarbe. Wer
+			// "Beta" sieht, entscheidet anders als bei einem fertigen Release.
+			if (!"RELEASE".equals(it.channel())) {
+				String ch = Text.translatable("lumilib.updates.channel."
+					+ it.channel().toLowerCase(java.util.Locale.ROOT)).getString();
+				Ui.drawTop(ctx, this.textRenderer, Ui.small(ch),
+					tx + Ui.widthBold(this.textRenderer, name) + 8,
+					top + Ui.BODY_H - Ui.SMALL_H, Ui.TOP_SMALL, Theme.ACCENT);
+			}
+
+			String versions = it.latest().isEmpty()
+				? Text.translatable("lumilib.updates.installed_only", it.installed()).getString()
+				: Text.translatable("lumilib.updates.from_to", it.installed(), it.latest()).getString();
+			Ui.drawTop(ctx, this.textRenderer,
+				Ui.small(Ui.fitSmall(this.textRenderer, versions, tw)),
+				tx, top + Ui.advance(Ui.BODY_H, Ui.BODY_D, 2), Ui.TOP_SMALL, Theme.TEXT_FAINT);
+		}
+		Sdf.clip(null);
+		ctx.disableScissor();
 	}
 
 	/** Die ausgewaehlte Mod, oder null fuer die Uebersicht. */
@@ -711,7 +1216,13 @@ public class LumiHubScreen extends ScaledScreen {
 			}
 			boolean hover = Draw.inside(mouseX, mouseY, bx, by, colW, Metrics.CARD_H)
 				&& mouseY >= listTop && mouseY < listBottom;
-			drawCard(ctx, visible.get(i), bx, by, colW, hover);
+			float amt = hover ? 1.0F : 0.0F;
+			if (i < this.cardHover.length) {
+				this.cardHover[i] = Anim.approach(this.cardHover[i], amt,
+					this.frameDt, Anim.HOVER_MS);
+				amt = this.cardHover[i];
+			}
+			drawCard(ctx, visible.get(i), bx, by, colW, amt);
 		}
 		Sdf.clip(null);
 		ctx.disableScissor();
@@ -1129,12 +1640,18 @@ public class LumiHubScreen extends ScaledScreen {
 		this.buttonAction = action;
 	}
 
-	private void drawCard(DrawContext ctx, HubEntry mod, int x, int y, int w, boolean hover) {
-		Surface.shadowCard(ctx, x, y, w, Metrics.CARD_H, 3, 2, Theme.SHADOW_CARD);
+	private void drawCard(DrawContext ctx, HubEntry mod, int x, int y, int w, float hover) {
+		// Unter der Maus hebt sich die Karte um einen Pixel und ihr
+		// Schatten wird tiefer. Ein Pixel reicht: Mehr wirkt wie ein Knopf,
+		// der wegspringt.
+		var pose = ctx.getMatrices();
+		pose.pushMatrix();
+		pose.translate(0.0F, -hover);
+		Surface.shadowCard(ctx, x, y, w, Metrics.CARD_H, 3, 2 + Math.round(hover), Theme.SHADOW_CARD);
 
 		// Ein Aufruf statt vier. Die alte Folge hatte eine sichtbare Naht
 		// auf halber Hoehe - gemessen 21 Helligkeitsstufen Sprung.
-		int fill = hover ? Theme.CARD_HOVER : Theme.CARD;
+		int fill = Anim.mix(Theme.CARD, Theme.CARD_HOVER, hover);
 		if (!Surface.glassCard(ctx, x, y, w, Metrics.CARD_H, fill)) {
 			Surface.card(ctx, x, y, w, Metrics.CARD_H, fill);
 			Surface.innerCard(ctx, x, y, w, Metrics.CARD_H, Theme.INNER_CARD);
@@ -1176,6 +1693,7 @@ public class LumiHubScreen extends ScaledScreen {
 		Ui.drawTop(ctx, this.textRenderer,
 			Ui.text(Ui.fit(this.textRenderer, mod.description().getString(), w - p * 2)),
 			x + p, y + p + rowH + 6, Ui.TOP_BODY, Theme.TEXT_MUTED);
+		pose.popMatrix();
 	}
 
 	/**
@@ -1307,6 +1825,16 @@ public class LumiHubScreen extends ScaledScreen {
 			ColourPopup.close();
 			return true;
 		}
+		// Dasselbe fuer eine aufgeschlagene Unterseite: Escape klappt sie
+		// zu, statt die ganze Mod-Seite zu verlassen. Erst beim zweiten
+		// Druck geht es eine Ebene hoeher - so wie man es von jedem
+		// Menue erwartet.
+		if (input.getKeycode() == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE
+			&& SettingsList.inSubPage()) {
+			SettingsList.back();
+			this.scroll = 0;
+			return true;
+		}
 		if (this.search.keyPressed(input)) {
 			this.scroll = 0;
 			return true;
@@ -1316,8 +1844,9 @@ public class LumiHubScreen extends ScaledScreen {
 			return true;
 		}
 		if (input.getKeycode() == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE
-			&& selectedId != null) {
+			&& (selectedId != null || showUpdates) && this.closingAt < 0L) {
 			selectedId = null;
+			showUpdates = false;
 			scroll = 0;
 			return true;
 		}
@@ -1325,9 +1854,25 @@ public class LumiHubScreen extends ScaledScreen {
 	}
 
 	@Override
+	protected boolean scaledMouseReleased(Click click) {
+		if (this.pressId != null) {
+			releaseRow((int) click.y());
+			return true;
+		}
+		return super.scaledMouseReleased(click);
+	}
+
+	@Override
 	protected boolean scaledMouseClicked(Click click, boolean doubled) {
 		double mx = click.x();
 		double my = click.y();
+
+		// Waehrend der Hub zugeht, nimmt er nichts mehr an. Sonst koennte
+		// ein schneller Klick noch eine Mod oeffnen, die man gar nicht mehr
+		// sieht.
+		if (this.closingAt >= 0L) {
+			return true;
+		}
 
 		// Der Farbwaehler liegt oben auf und bekommt den Klick ZUERST,
 		// noch vor super: Sonst greift ein Widget darunter. Ein Klick
@@ -1345,7 +1890,7 @@ public class LumiHubScreen extends ScaledScreen {
 		}
 
 		// Suchfeld zuerst - es liegt rechts und ueberschneidet nichts.
-		if (selectedId == null && this.search.mouseClicked(mx, my)) {
+		if (selectedId == null && !showUpdates && this.search.mouseClicked(mx, my)) {
 			return true;
 		}
 		this.search.setFocused(false);
@@ -1372,29 +1917,53 @@ public class LumiHubScreen extends ScaledScreen {
 		int x = sx + Metrics.PAD;
 		int w = sw - Metrics.PAD * 2;
 
-		// Update-Zeile: oeffnet Mod Menu, mit dem Hub als Rueckweg.
+		// Update-Zeile: zeigt die Liste der Updates rechts im Hub. Vorher
+		// sprang sie direkt in Mod Menu - man verliess den Hub, um eine
+		// Zahl zu verstehen.
 		if (this.updatesClickable
-			&& mx >= x && mx < x + w
+			&& mx >= x - 4 && mx < x + w + 4
 			&& my >= this.updatesRowY && my < this.updatesRowY + Metrics.ROW_H) {
-			try {
-				if (this.client != null) {
-					this.client.setScreen(ModMenuUpdates.screen(this));
-					return true;
-				}
-			} catch (Throwable t) {
-				LumiLib.LOGGER.warn("[LumiLib] Could not open Mod Menu.", t);
-			}
+			this.showUpdates = true;
+			this.selectedId = null;
+			this.scroll = 0;
+			this.updatesFetchedAt = 0L;
+			return true;
 		}
 
 		// All-Mods-Knopf: zurueck zur Uebersicht.
 		if (Draw.inside(mx, my, x - 4, allModsRowY(), w + 8, Metrics.ROW_H)) {
 			selectedId = null;
+			showUpdates = false;
 			scroll = 0;
 			return true;
 		}
 
+		// Knoepfe der Update-Seite.
+		if (this.showUpdates) {
+			if (this.updMenuShown && Draw.inside(mx, my, this.updMenuX, this.updMenuY,
+					this.updMenuW, 22)) {
+				try {
+					if (this.client != null) {
+						this.client.setScreen(ModMenuUpdates.screen(this));
+					}
+				} catch (Throwable t) {
+					LumiLib.LOGGER.warn("[LumiLib] Could not open Mod Menu.", t);
+				}
+				return true;
+			}
+			if (my >= listTop && my < listBottom) {
+				for (int i = 0; i < this.updBtnCount && i < this.updateItems.size(); i++) {
+					if (Draw.inside(mx, my, this.updBtnX[i], this.updBtnY[i], this.updBtnW[i], 18)) {
+						openLink(this.updateItems.get(i).link());
+						return true;
+					}
+				}
+			}
+		}
+
 		int y = modRowsTop();
 		int limit = sidebarListBottom();
+		int index = 0;
 		for (HubEntry e : visible) {
 			if (y + Metrics.ROW_H > limit) {
 				break;
@@ -1408,13 +1977,17 @@ public class LumiHubScreen extends ScaledScreen {
 				return true;
 			}
 			if (Draw.inside(mx, my, x - 4, y, w + 8, Metrics.ROW_H)) {
-				selectedId = e.id();
-				// Oben anfangen. Ohne das uebernimmt die neue Seite
-				// den Rollstand der Uebersicht und startet mittendrin.
-				scroll = 0;
+				// Noch nicht oeffnen: Erst beim Loslassen ist klar, ob das
+				// ein Klick war oder der Anfang eines Ziehens.
+				this.pressId = e.id();
+				this.pressIndex = index;
+				this.pressY = (int) my;
+				this.pressOffset = (int) my - y;
+				this.rowDragging = false;
 				return true;
 			}
 			y += Metrics.ROW_H;
+			index++;
 		}
 
 		// Einstellungen auf der Mod-Seite.
@@ -1466,13 +2039,14 @@ public class LumiHubScreen extends ScaledScreen {
 		// Karte in der Uebersicht: oeffnet die Seite der Mod, nicht mehr
 		// direkt deren eigenen Bildschirm. Der Weg dorthin fuehrt jetzt
 		// ueber LumiLib.
-		if (selectedId == null && my >= listTop && my < listBottom) {
+		if (selectedId == null && !showUpdates && my >= listTop && my < listBottom) {
 			for (int i = 0; i < visible.size(); i++) {
 				int bx = cx + (i % cols) * (colW + Metrics.CARD_GAP);
 				int by = listTop + (i / cols) * (Metrics.CARD_H + Metrics.CARD_GAP) - scroll;
 				if (Draw.inside(mx, my, bx, by, colW, Metrics.CARD_H)) {
 					selectedId = visible.get(i).id();
-						scroll = 0;
+					showUpdates = false;
+					scroll = 0;
 					return true;
 				}
 			}
@@ -1532,11 +2106,46 @@ public class LumiHubScreen extends ScaledScreen {
 		}
 	}
 
+	/**
+	 * Der Skin des angemeldeten Spielers.
+	 *
+	 * Angefordert wird er genau einmal, nicht bei jedem Bild - das Ergebnis
+	 * steht in diesem Feld.
+	 */
+	@Nullable
+	private Supplier<SkinTextures> skinSupplier;
+
+	/**
+	 * Der Kopf oben links.
+	 *
+	 * IM SPIEL steht der Skin am Spieler selbst und ist sofort da.
+	 *
+	 * IM HAUPTMENUE gibt es keinen Spieler. Frueher stand hier
+	 * DefaultSkinHelper.getSkinTextures(uuid) - das liefert aber NIE den
+	 * echten Skin, sondern den aus der UUID errechneten Standard, also
+	 * Steve oder Alex. Es sah nach einem Fehler aus und war keiner: Es
+	 * wurde genau das gezeichnet, was angefordert wurde.
+	 *
+	 * Richtig ist der PlayerSkinProvider. supplySkinTextures stoesst den
+	 * Download an und gibt SOFORT einen Supplier zurueck, der bis zum
+	 * Eintreffen den Standard liefert und danach den echten - ohne zu
+	 * blockieren. Genau deshalb darf er in einer Zeichenschleife stehen.
+	 *
+	 * requireSecure bleibt false: true verwirft unsignierte Skins, und die
+	 * Signatur interessiert hier niemanden - es ist ein Bild in einem
+	 * Menue, keine Identitaetspruefung.
+	 */
 	private SkinTextures sessionSkin() {
-		if (this.client != null && this.client.player != null) {
+		if (this.client == null) {
+			return DefaultSkinHelper.getSteve();
+		}
+		if (this.client.player != null) {
 			return this.client.player.getSkin();
 		}
-		UUID uuid = LumiLib.sessionUuid();
-		return uuid != null ? DefaultSkinHelper.getSkinTextures(uuid) : DefaultSkinHelper.getSteve();
+		if (this.skinSupplier == null) {
+			this.skinSupplier = this.client.getSkinProvider()
+				.supplySkinTextures(this.client.getGameProfile(), false);
+		}
+		return this.skinSupplier.get();
 	}
 }

@@ -1,5 +1,6 @@
 package com.lumitier.lumilib.api;
 
+import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.Nullable;
 
@@ -264,6 +265,134 @@ public final class SettingsPage {
 	public record Note(Text label, @Nullable Text description, boolean warning)
 		implements Row {}
 
+	/**
+	 * Eine Liste von Eintraegen, von denen jeder eine eigene Unterseite hat.
+	 *
+	 * WOFUER: Item Drop Tweaks stellt Groesse, Leuchten und Schatten JE ITEM
+	 * ein. Das sind beliebig viele Eintraege mit je drei Werten - als flache
+	 * Zeilen unbrauchbar.
+	 *
+	 * WARUM DIE EINTRAEGE AUS EINEM Supplier KOMMEN und nicht als feste
+	 * Liste uebergeben werden: Hinzufuegen und Entfernen aendert sie
+	 * waehrend die Seite offen ist. Eine Kopie waere ab dem ersten Klick
+	 * veraltet, und die Mod muesste die ganze Seite neu bauen.
+	 *
+	 * WARUM EIN EINTRAG EINE GANZE SettingsPage TRAEGT und nicht nur eine
+	 * Liste von Zeilen: Damit die Unterseite ALLES kann, was eine
+	 * Hauptseite kann - und zwar wirklich alles, nicht nur das Zeichnen.
+	 *
+	 * Der erste Versuch gab eine List<Row> mit. Das sah sparsamer aus,
+	 * hat aber das Zuruecksetzen verloren: Die Standardwerte stehen in
+	 * einer Tabelle AM SEITENOBJEKT, befuellt vom Builder. Zeilen, die
+	 * ausserhalb des Builders entstehen, kennt diese Tabelle nicht - also
+	 * gab es keine Zuruecksetzen-Knoepfe, und zwar lautlos. Dasselbe haette
+	 * fuer Abschnitte und Suche gegolten.
+	 *
+	 * Mit einer vollstaendigen Seite baut die Mod sie ganz normal ueber
+	 * SettingsPage.builder(...), und der Hub zeichnet sie mit demselben
+	 * Code wie jede andere.
+	 *
+	 * ALS Supplier, nicht als fertige Seite: Eine Seite zu bauen kostet
+	 * mehr als eine Zeile, und die Eintraege werden bei jedem Bild neu
+	 * abgefragt. So entsteht sie erst, wenn der Eintrag aufgeschlagen wird.
+	 *
+	 * ZUM ICON: ein ItemStack, weil das der einzige Weg ist, in Minecraft
+	 * etwas zu zeigen, das wie ein Gegenstand aussieht - Bloecke haben eine
+	 * Item-Form, also deckt es beides ab. null heisst: kein Bild, nur Text.
+	 *
+	 * @param entries  die Eintraege, bei jedem Bild neu abgefragt
+	 * @param onAdd    was der Plus-Knopf tut; null blendet ihn aus. Die Mod
+	 *                 entscheidet selbst, wie ausgewaehlt wird - fuer Items
+	 *                 bietet LumiLib einen passenden Waehler an.
+	 * @param onRemove bekommt die Nummer des Eintrags; null blendet die
+	 *                 Minus-Knoepfe aus
+	 * @param max      hoechstens so viele Eintraege; darueber ist Plus grau.
+	 *                 0 oder weniger heisst: keine Grenze.
+	 */
+	public record ListRow(Text label, @Nullable Text description,
+	                      Supplier<List<Entry>> entries,
+	                      @Nullable Runnable onAdd,
+	                      @Nullable IntConsumer onRemove,
+	                      int max)
+		implements Row {
+
+		/**
+		 * Ein Eintrag der Liste.
+		 *
+		 * ZWEI ARTEN VON EINTRAG, und genau eine davon gilt:
+		 *
+		 * Hat der Eintrag eine page, schlaegt ein Klick eine Unterseite auf.
+		 * Das ist der Normalfall - ein Item mit mehreren Werten darunter.
+		 *
+		 * Hat er stattdessen ein onClick, fuehrt der Klick das aus und es
+		 * bleibt, wo es ist. Das ist fuer Eintraege, hinter denen genau EIN
+		 * Wert steckt: eine eigene Unterseite mit einer einzigen Zeile waere
+		 * ein Klick zu viel. Stattdessen oeffnet die Mod ihr eigenes kleines
+		 * Fenster - etwa den Verzauberungswaehler, der die Stufe gleich
+		 * miterfragt.
+		 *
+		 * onClick hat Vorrang. Sind beide null, tut der Eintrag nichts;
+		 * dann ist er reine Anzeige.
+		 *
+		 * ZWEI TEXTZEILEN: label oben, sub klein und blass darunter. Das sub
+		 * ist fuer das, was einen Eintrag von einem gleichnamigen
+		 * unterscheidet - bei Item Drop Tweaks die Verzauberungen. In EINER
+		 * Zeile hinter dem Namen las sich das wie ein Satz und man sah
+		 * nicht, wo der Name aufhoert.
+		 *
+		 * @param icon    Bild links; null heisst nur Text
+		 * @param label   Beschriftung, erste Zeile
+		 * @param sub     zweite Zeile, klein und blass; null heisst
+		 *                einzeilig, dann sitzt das label mittig
+		 * @param page    die Unterseite, erst beim Aufschlagen gebaut; null,
+		 *                wenn es keine gibt
+		 * @param muted   true zeichnet den Eintrag durchgestrichen und blass.
+		 *                Fuer Eintraege, die gerade nicht wirken - etwa weil
+		 *                ein anderer sie verdeckt. Sie bleiben anklickbar,
+		 *                denn genau dort behebt man den Grund.
+		 * @param onClick statt der Unterseite auszufuehren; null heisst
+		 *                Unterseite
+		 */
+		public record Entry(@Nullable ItemStack icon, Text label, @Nullable Text sub,
+		                    @Nullable Supplier<SettingsPage> page, boolean muted,
+		                    @Nullable Runnable onClick) {
+
+			public Entry(@Nullable ItemStack icon, Text label,
+			             Supplier<SettingsPage> page, boolean muted) {
+				this(icon, label, null, page, muted, null);
+			}
+
+			public Entry(@Nullable ItemStack icon, Text label,
+			             Supplier<SettingsPage> page) {
+				this(icon, label, null, page, false, null);
+			}
+
+			/** Zweizeiliger Eintrag mit Unterseite. */
+			public static Entry of(@Nullable ItemStack icon, Text label,
+			                       @Nullable Text sub,
+			                       Supplier<SettingsPage> page, boolean muted) {
+				return new Entry(icon, label, sub, page, muted, null);
+			}
+
+			/** Eintrag, der beim Klick etwas tut statt aufzuklappen. */
+			public static Entry action(@Nullable ItemStack icon, Text label,
+			                           Runnable onClick) {
+				return new Entry(icon, label, null, null, false, onClick);
+			}
+
+			/** Zweizeiliger Eintrag, der beim Klick etwas tut. */
+			public static Entry action(@Nullable ItemStack icon, Text label,
+			                           @Nullable Text sub, Runnable onClick) {
+				return new Entry(icon, label, sub, null, false, onClick);
+			}
+		}
+
+		/** Darf noch einer dazu? */
+		public boolean canAdd() {
+			return onAdd != null && (max <= 0 || entries.get().size() < max);
+		}
+	}
+
 	// ------------------------------------------------------------------
 	// Aufbau
 	// ------------------------------------------------------------------
@@ -316,6 +445,20 @@ public final class SettingsPage {
 		}
 
 		/** Farbwaehler. Getter und Setter bleiben bei ARGB-Integern. */
+		/**
+		 * Eine Liste mit eigener Unterseite je Eintrag.
+		 *
+		 * Ohne Zuruecksetzen: Was zurueckgesetzt werden soll, ist bei
+		 * einer Liste nicht eindeutig - der ganze Inhalt, oder die Werte
+		 * je Eintrag? Wer das braucht, baut sich eine Action daneben.
+		 */
+		public Builder list(String id, Supplier<List<ListRow.Entry>> entries,
+		                    @Nullable Runnable onAdd, @Nullable IntConsumer onRemove,
+		                    int max) {
+			return row(new ListRow(label(id), description(id), entries,
+				onAdd, onRemove, max));
+		}
+
 		public Builder color(String id, Supplier<Integer> getter, Consumer<Integer> setter) {
 			return row(new Colour(label(id), description(id),
 				() -> getter.get(), v -> setter.accept(v)));

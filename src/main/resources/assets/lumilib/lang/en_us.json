@@ -42,5 +42,22 @@
   "lumilib.server.toast.disabled": "Disabled on this server",
   "lumilib.server.toast.now_disabled": "Now disabled on this server",
   "lumilib.server.toast.enabled": "Enabled again on this server",
-  "lumilib.server.toast.left": "Enabled again"
+  "lumilib.server.toast.left": "Enabled again",
+  "lumilib.list.back": "Back",
+  "lumilib.picker.title": "Choose an item",
+  "lumilib.picker.empty": "No match",
+  "lumilib.picker.held": "In hand: %s",
+  "lumilib.enchant.title": "Choose an enchantment",
+  "lumilib.option.animations": "Animations",
+  "lumilib.option.animations.desc": "Let the hub fade in and out, slide between pages and ease hover and switches. Turn it off for hard cuts.",
+  "lumilib.updates.title": "Updates",
+  "lumilib.updates.open_mod_menu": "Open in Mod Menu",
+  "lumilib.updates.all_current": "Everything is up to date.",
+  "lumilib.updates.source": "Mod Menu checks Modrinth when the game starts.",
+  "lumilib.updates.download": "Download",
+  "lumilib.updates.channel.beta": "Beta",
+  "lumilib.updates.channel.alpha": "Alpha",
+  "lumilib.updates.channel.release": "Release",
+  "lumilib.updates.from_to": "Installed %s, new %s",
+  "lumilib.updates.installed_only": "Installed %s, a newer version is available"
 }

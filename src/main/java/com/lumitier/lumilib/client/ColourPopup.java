@@ -112,10 +112,18 @@ final class ColourPopup {
 
 		px = Math.max(4, Math.min(screenW - W - 4, rowRight - W));
 		py = rowBottom + 4;
+		openedUp = false;
 		if (py + H > screenH - 4) {
 			py = Math.max(4, rowTop - H - 4);
+			openedUp = true;
 		}
+		openedAt = Anim.now();
 	}
+
+	/** Wann der Waehler aufging - er waechst aus der Ecke an seiner Zeile. */
+	private static long openedAt;
+	/** Ueber der Zeile aufgeklappt statt darunter. */
+	private static boolean openedUp;
 
 	// ------------------------------------------------------------------
 	// Zeichnen
@@ -125,6 +133,28 @@ final class ColourPopup {
 		if (open == null) {
 			return;
 		}
+		// Waechst aus der Ecke, die an der Zeile haengt: Dann sieht man,
+		// zu welcher Farbe er gehoert. 92 % statt 96 wie bei den Fenstern -
+		// er ist klein, da braucht es etwas mehr Weg, um aufzufallen.
+		float t = Anim.easeOut(Anim.progress(openedAt, Anim.PAGE_MS));
+		var pose = ctx.getMatrices();
+		pose.pushMatrix();
+		if (t < 1.0F) {
+			float k = 0.92F + 0.08F * t;
+			float ax = px + W;
+			float ay = openedUp ? py + H : py;
+			pose.translate(ax, ay);
+			pose.scale(k, k);
+			pose.translate(-ax, -ay);
+		}
+		try {
+			renderBody(ctx, tr, mouseX, mouseY);
+		} finally {
+			pose.popMatrix();
+		}
+	}
+
+	private static void renderBody(DrawContext ctx, TextRenderer tr, int mouseX, int mouseY) {
 		// Schatten zuerst: Der Waehler schwebt ueber der Seite, und ohne
 		// Schatten klebt er darauf wie aufgemalt.
 		Surface.shadowPanel(ctx, px, py, W, H,

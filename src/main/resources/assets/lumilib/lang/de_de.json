@@ -42,5 +42,22 @@
   "lumilib.server.toast.disabled": "Auf diesem Server abgeschaltet",
   "lumilib.server.toast.now_disabled": "Jetzt auf diesem Server abgeschaltet",
   "lumilib.server.toast.enabled": "Auf diesem Server wieder aktiv",
-  "lumilib.server.toast.left": "Wieder aktiv"
+  "lumilib.server.toast.left": "Wieder aktiv",
+  "lumilib.list.back": "Zurück",
+  "lumilib.picker.title": "Item wählen",
+  "lumilib.picker.empty": "Kein Treffer",
+  "lumilib.picker.held": "In der Hand: %s",
+  "lumilib.enchant.title": "Verzauberung wählen",
+  "lumilib.option.animations": "Animationen",
+  "lumilib.option.animations.desc": "Den Hub ein- und ausblenden, zwischen Seiten gleiten und Hover und Schalter weich übergehen lassen. Aus für harte Schnitte.",
+  "lumilib.updates.title": "Updates",
+  "lumilib.updates.open_mod_menu": "In Mod Menu öffnen",
+  "lumilib.updates.all_current": "Alles ist aktuell.",
+  "lumilib.updates.source": "Mod Menu prüft beim Spielstart auf Modrinth.",
+  "lumilib.updates.download": "Herunterladen",
+  "lumilib.updates.channel.beta": "Beta",
+  "lumilib.updates.channel.alpha": "Alpha",
+  "lumilib.updates.channel.release": "Release",
+  "lumilib.updates.from_to": "Installiert %s, neu %s",
+  "lumilib.updates.installed_only": "Installiert %s, eine neuere Version ist da"
 }

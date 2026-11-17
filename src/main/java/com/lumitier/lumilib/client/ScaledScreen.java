@@ -39,6 +39,18 @@ public abstract class ScaledScreen extends Screen {
 	private int realWidth;
 	private int realHeight;
 
+	/**
+	 * OEFFNEN UND SCHLIESSEN, fuer jeden Bildschirm, der hiervon erbt.
+	 *
+	 * Steht hier und nicht in jedem Bildschirm einzeln, damit sich alle
+	 * Menues von LumiLib und den Mods gleich bewegen - auch solche, die es
+	 * noch nicht gibt. Wer sich selbst bewegt (der Hub), meldet das ueber
+	 * animatesItself() ab.
+	 */
+	private long openedAt;
+	private long closingAt = -1L;
+	private Runnable afterClose;
+
 	protected ScaledScreen(Text title) {
 		super(title);
 	}
@@ -92,15 +104,75 @@ public abstract class ScaledScreen extends Screen {
 
 	@Override
 	public final void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+		if (this.openedAt == 0L) {
+			this.openedAt = Anim.now();
+		}
+		// Schliessen durch? Dann jetzt wirklich weg, ohne noch ein Bild.
+		if (this.closingAt >= 0L && Anim.progress(this.closingAt, Anim.CLOSE_MS) >= 1.0F) {
+			finishClose();
+			return;
+		}
 		int mx = (int) (mouseX / scale);
 		int my = (int) (mouseY / scale);
 		ctx.getMatrices().pushMatrix();
 		ctx.getMatrices().scale(scale, scale);
 		try {
+			if (!animatesItself()) {
+				// Dieselbe Bewegung wie beim Hub: aus 96 % wachsen und 8
+				// Pixel von unten kommen, um die Mitte des Bildschirms.
+				float in = Anim.easeOut(Anim.progress(this.openedAt, Anim.OPEN_MS));
+				float out = this.closingAt >= 0L
+					? Anim.easeIn(Anim.progress(this.closingAt, Anim.CLOSE_MS)) : 0.0F;
+				float shown = in * (1.0F - out);
+				if (shown < 1.0F) {
+					float k = 0.96F + 0.04F * shown;
+					float cx = this.width / 2.0F;
+					float cy = this.height / 2.0F;
+					ctx.getMatrices().translate(cx, cy + (1.0F - shown) * 8.0F);
+					ctx.getMatrices().scale(k, k);
+					ctx.getMatrices().translate(-cx, -cy);
+				}
+			}
 			renderScaled(ctx, mx, my, delta);
 			super.render(ctx, mx, my, delta);
 		} finally {
 			ctx.getMatrices().popMatrix();
+		}
+	}
+
+	/** true, wenn der Bildschirm seine Bewegung selbst zeichnet. */
+	protected boolean animatesItself() {
+		return false;
+	}
+
+	/**
+	 * Schliesst mit Bewegung und fuehrt danach {@code done} aus - meist
+	 * {@code client.setScreen(parent)}. Ohne Animationen sofort.
+	 *
+	 * Ein zweiter Aufruf waehrend des Schliessens beendet sofort: Wer
+	 * zweimal Escape drueckt, will nicht warten.
+	 */
+	protected final void closeAnimated(Runnable done) {
+		if (this.closingAt >= 0L || !Anim.enabled()) {
+			this.afterClose = done;
+			finishClose();
+			return;
+		}
+		this.afterClose = done;
+		this.closingAt = Anim.now();
+	}
+
+	/** Gerade dabei zu schliessen? Dann nimmt der Bildschirm nichts mehr an. */
+	protected final boolean closing() {
+		return this.closingAt >= 0L;
+	}
+
+	private void finishClose() {
+		this.closingAt = -1L;
+		Runnable r = this.afterClose;
+		this.afterClose = null;
+		if (r != null) {
+			r.run();
 		}
 	}
 
@@ -139,6 +211,9 @@ public abstract class ScaledScreen extends Screen {
 
 	@Override
 	public final boolean mouseClicked(Click click, boolean doubled) {
+		if (closing()) {
+			return true;
+		}
 		return scaledMouseClicked(scaled(click), doubled);
 	}
 

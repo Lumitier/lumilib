@@ -158,6 +158,9 @@ public class LumiLibClient implements ClientModInitializer {
 						LumiLib.cfg.darkTheme = v;
 						applyTheme();
 					}, true)
+				.toggle("animations",
+					() -> LumiLib.cfg.animations,
+					v -> LumiLib.cfg.animations = v, true)
 				.intSlider("hub_sound_volume", 0, 100, 5,
 					() -> LumiLib.cfg.hubSoundVolume,
 					v -> {
