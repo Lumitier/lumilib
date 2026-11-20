@@ -150,6 +150,26 @@ public final class LumiLibApi {
 	}
 
 	/**
+	 * Waehler fuer einen Spieler, im Aussehen des Hubs: Suchfeld, alle, die
+	 * gerade auf dem Server sind, und der getippte Name als eigener
+	 * Eintrag - so geht es auch fuer jemanden, der offline ist, und im
+	 * Hauptmenue. Seit LumiLib 2.1.0.
+	 *
+	 * @param parent  wohin es danach zurueckgeht (null = der offene Bildschirm)
+	 * @param onPick  bekommt den Namen
+	 * @param blocked welche Namen blass und nicht waehlbar sind (z. B. schon hinzugefuegte)
+	 */
+	public static void openPlayerPicker(net.minecraft.client.gui.screen.Screen parent,
+	                                    java.util.function.Consumer<String> onPick,
+	                                    java.util.function.Predicate<String> blocked) {
+		net.minecraft.client.gui.screen.Screen from = parent != null
+			? parent
+			: net.minecraft.client.MinecraftClient.getInstance().currentScreen;
+		com.lumitier.lumilib.client.PlayerPicker.open(from, onPick,
+			blocked == null ? name -> false : blocked);
+	}
+
+	/**
 	 * Oeffnet den Verzauberungswaehler von LumiLib.
 	 *
 	 * Verzauberungen sind datengesteuert und haengen an der geladenen

@@ -1304,12 +1304,38 @@ public class LumiHubScreen extends ScaledScreen implements LumiScreen {
 		// Sdf.clip die eigenen Flaechen und Buchstaben. Fehlt das zweite,
 		// laeuft die gerollte Seite ueber den Fensterrand und zeichnet
 		// ueber die Ueberschrift.
-		ctx.enableScissor(cx, listTop, cx + cw, listBottom);
-		Sdf.clip(new ScreenRect(cx, listTop, cw, listBottom - listTop));
-		int bottom = renderModBody(ctx, mod, cx, listTop - scroll, cw, mouseX, mouseY);
+		// VORSCHAU (SettingsPage.preview): eine Spalte rechts, die beim
+		// Rollen stehen bleibt. Die Einstellungen werden dafuer schmaler.
+		// Ist das Fenster zu schmal, gibt es keine Vorschau - die
+		// Einstellungen sind wichtiger als die Figur.
+		int bodyW = cw;
+		this.previewShown = false;
+		SettingsPage shownPage = page == null ? null : SettingsList.shown(page);
+		SettingsPage previewPage = shownPage != null && shownPage.hasPreview() ? shownPage
+			: (page != null && page.hasPreview() ? page : null);
+		int pw = previewPage == null ? 0 : Preview.columnWidth(cw);
+		if (pw > 0) {
+			bodyW = cw - pw - Metrics.CARD_GAP;
+			this.previewX = cx + bodyW + Metrics.CARD_GAP;
+			this.previewY = listTop;
+			this.previewW = pw;
+			this.previewH = Math.min(listBottom - listTop, Math.max(220, pw * 2 + 40));
+			this.previewShown = true;
+			Preview.updateDrag(mouseX, mouseY, mouseDown());
+		}
+
+		ctx.enableScissor(cx, listTop, cx + bodyW, listBottom);
+		Sdf.clip(new ScreenRect(cx, listTop, bodyW, listBottom - listTop));
+		int bottom = renderModBody(ctx, mod, cx, listTop - scroll, bodyW, mouseX, mouseY);
 		Sdf.clip(null);
 		ctx.disableScissor();
 		contentHeight = bottom - (listTop - scroll);
+
+		if (this.previewShown) {
+			Preview.render(ctx, this.textRenderer, previewX, previewY, previewW, previewH,
+				previewPage.previewEntity(), previewPage.previewsPlayer(),
+				previewPage.previewPlayerName(), mouseX, mouseY);
+		}
 
 		// AUSSERHALB des Schnittfensters: Der Farbwaehler liegt ueber der
 		// Seite und soll ueber deren Rand hinausragen duerfen. Innerhalb
@@ -1500,6 +1526,10 @@ public class LumiHubScreen extends ScaledScreen implements LumiScreen {
 
 	/** Lage der zuletzt gezeichneten Einstellungsliste. */
 	private int pageListX, pageListY, pageListW;
+
+	/** Lage der Vorschau-Spalte - gemerkt fuer den Klick, wie pageListX. */
+	private boolean previewShown;
+	private int previewX, previewY, previewW, previewH;
 	private boolean pageListShown;
 
 	/** Suchfeld im Kopf der Mod-Seite - eigenes, nicht das der Uebersicht. */
@@ -1988,6 +2018,13 @@ public class LumiHubScreen extends ScaledScreen implements LumiScreen {
 			}
 			y += Metrics.ROW_H;
 			index++;
+		}
+
+		// Vorschau: Knoepfe; Ziehen dreht und neigt die Figur, Doppelklick stellt sie zurueck.
+		if (selectedId != null && previewShown
+				&& Draw.inside(mx, my, previewX, previewY, previewW, previewH)) {
+			Preview.click((int) mx, (int) my, doubled);
+			return true;
 		}
 
 		// Einstellungen auf der Mod-Seite.

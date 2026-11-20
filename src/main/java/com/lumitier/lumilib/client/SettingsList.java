@@ -102,6 +102,15 @@ final class SettingsList {
 		return openPage != null ? openPage : page;
 	}
 
+	/**
+	 * Die Seite, die gerade zu sehen ist: die offene Unterseite, sonst die
+	 * Hauptseite. Fuer die Vorschau - eine Unterseite kann eine andere
+	 * Figur zeigen als die Hauptseite (z. B. einen anderen Spieler).
+	 */
+	static SettingsPage shown(SettingsPage page) {
+		return effective(page);
+	}
+
 	/** Ist gerade eine Unterseite aufgeschlagen? */
 	/** Welche Unterseite offen ist, -1 fuer keine. Der Hub erkennt daran einen Seitenwechsel. */
 	static int subPage() {
@@ -277,6 +286,9 @@ final class SettingsList {
 	 */
 	private static final int LIST_ENTRY_H = 30;
 
+	/** Luft unter dem letzten Eintrag einer Liste. */
+	private static final int LIST_BOTTOM_PAD = 6;
+
 	/** Kantenlaenge eines Item-Bildes. Von Minecraft fest vorgegeben. */
 	private static final int ITEM = 16;
 
@@ -366,7 +378,12 @@ final class SettingsList {
 			// die Kopfzeile - und das ist richtig so: Wer noch nichts
 			// hinzugefuegt hat, braucht keinen leeren Kasten, sondern
 			// den Plus-Knopf.
-			return Metrics.SET_ROW_H + l.entries().get().size() * LIST_ENTRY_H;
+			//
+			// Unter dem letzten Eintrag etwas Luft: Ohne sie klebte die
+			// Unterzeile eines zweizeiligen Eintrags an der Unterkante
+			// des Kastens.
+			int n = l.entries().get().size();
+			return Metrics.SET_ROW_H + n * LIST_ENTRY_H + (n > 0 ? LIST_BOTTOM_PAD : 0);
 		}
 		if (row instanceof SettingsPage.Note n) {
 			// Eine Zeile ist genau so hoch wie jede andere. Erst ab der

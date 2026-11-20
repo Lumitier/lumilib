@@ -60,13 +60,68 @@ public final class SettingsPage {
 	private final @Nullable Runnable save;
 	private final Map<Row, Reset> resets;
 	private final @Nullable IntSupplier refresh;
+	private final @Nullable Supplier<net.minecraft.entity.LivingEntity> preview;
+	private final boolean previewPlayer;
+	private final @Nullable String previewName;
 
 	private SettingsPage(List<Section> sections, @Nullable Runnable save,
-	                     Map<Row, Reset> resets, @Nullable IntSupplier refresh) {
+	                     Map<Row, Reset> resets, @Nullable IntSupplier refresh,
+	                     @Nullable Supplier<net.minecraft.entity.LivingEntity> preview,
+	                     boolean previewPlayer, @Nullable String previewName) {
 		this.sections = List.copyOf(sections);
 		this.save = save;
 		this.resets = resets;
 		this.refresh = refresh;
+		this.preview = preview;
+		this.previewPlayer = previewPlayer;
+		this.previewName = previewName;
+	}
+
+	/**
+	 * Welcher Spieler in der Vorschau steht, wenn er nicht geladen ist -
+	 * null fuer einen selbst. Siehe Builder.previewPlayer(String).
+	 * Seit LumiLib 2.1.0.
+	 */
+	public @Nullable String previewPlayerName() {
+		return previewName;
+	}
+
+	/**
+	 * Zeigt die Vorschau den eigenen Spieler? Dann zeichnet der Hub ihn
+	 * auch ohne Welt (Hauptmenue) - mit dem eigenen Skin, nur eben ohne
+	 * Ruestung und Gegenstaende, weil es ohne Welt keine gibt.
+	 * Seit LumiLib 2.1.0.
+	 */
+	public boolean previewsPlayer() {
+		return previewPlayer;
+	}
+
+	/**
+	 * Hat diese Seite eine Vorschau? Dann zeichnet der Hub rechts neben den
+	 * Einstellungen eine Figur, die beim Rollen stehen bleibt.
+	 * Seit LumiLib 2.1.0.
+	 */
+	public boolean hasPreview() {
+		return preview != null;
+	}
+
+	/**
+	 * Was die Vorschau zeigen soll - oder null, wenn gerade nichts da ist
+	 * (keine Welt geladen, Spieler nicht in der Naehe). Der Hub zeigt dann
+	 * einen Hinweis statt der Figur. Wird in jedem Bild abgefragt.
+	 * Seit LumiLib 2.1.0.
+	 */
+	public @Nullable net.minecraft.entity.LivingEntity previewEntity() {
+		if (preview == null) {
+			return null;
+		}
+		try {
+			return preview.get();
+		} catch (Throwable t) {
+			// Eine Mod, deren Vorschau umfaellt, soll den Hub nicht
+			// mitreissen - dann eben der Hinweis.
+			return null;
+		}
 	}
 
 	/**
@@ -409,6 +464,9 @@ public final class SettingsPage {
 		private List<Row> currentRows;
 		private Runnable save;
 		private IntSupplier refresh;
+		private Supplier<net.minecraft.entity.LivingEntity> preview;
+		private boolean previewPlayer;
+		private String previewName;
 
 		private Builder(String modId) {
 			this.modId = modId;
@@ -581,9 +639,68 @@ public final class SettingsPage {
 			return this;
 		}
 
+		/**
+		 * Vorschau neben den Einstellungen: eine Figur, die man mit der Maus
+		 * drehen kann und die beim Rollen stehen bleibt - fuer Mods, die
+		 * etwas am Aussehen aendern. So sieht man jede Aenderung sofort,
+		 * ohne den Hub zu verlassen.
+		 *
+		 * Der Supplier wird in jedem Bild gefragt und darf null liefern
+		 * (dann steht dort ein Hinweis). Auf schmalen Fenstern laesst der
+		 * Hub die Vorschau weg, damit die Einstellungen Platz haben.
+		 * Seit LumiLib 2.1.0.
+		 */
+		public Builder preview(Supplier<net.minecraft.entity.LivingEntity> entity) {
+			this.preview = entity;
+			this.previewPlayer = false;
+			this.previewName = null;
+			return this;
+		}
+
+		/**
+		 * Vorschau mit dem eigenen Spieler - der haeufigste Fall. Geht auch
+		 * im Hauptmenue, ohne Welt: Dann zeichnet der Hub eine Figur mit dem
+		 * eigenen Skin.
+		 * Seit LumiLib 2.1.0.
+		 */
+		public Builder previewPlayer() {
+			preview(() -> net.minecraft.client.MinecraftClient.getInstance().player);
+			this.previewPlayer = true;
+			return this;
+		}
+
+		/**
+		 * Vorschau mit einem bestimmten Spieler, nach Name. Ist er in der
+		 * Welt geladen, steht er selbst da - mit Ruestung und allem. Sonst
+		 * (offline, weit weg, Hauptmenue) eine Figur mit seinem Skin, den
+		 * Minecraft dafuer von Mojangs Servern holt.
+		 *
+		 * Fuer Mods, die etwas nachsehen wollen: Bei dieser Ersatzfigur
+		 * steht der Name in PlayerEntityRenderState.playerName, und id ist
+		 * Integer.MIN_VALUE - es gibt kein Objekt dazu in der Welt.
+		 * Seit LumiLib 2.1.0.
+		 */
+		public Builder previewPlayer(String name) {
+			preview(() -> {
+				net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
+				if (client.world == null || name == null) {
+					return null;
+				}
+				for (net.minecraft.entity.player.PlayerEntity p : client.world.getPlayers()) {
+					if (p.getGameProfile().name().equalsIgnoreCase(name)) {
+						return p;
+					}
+				}
+				return null;
+			});
+			this.previewPlayer = true;
+			this.previewName = name;
+			return this;
+		}
+
 		public SettingsPage build() {
 			flush();
-			return new SettingsPage(sections, save, resets, refresh);
+			return new SettingsPage(sections, save, resets, refresh, preview, previewPlayer, previewName);
 		}
 
 		private void flush() {
