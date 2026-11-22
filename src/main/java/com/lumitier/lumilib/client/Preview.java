@@ -40,13 +40,13 @@ final class Preview {
 	/** Aktuelle Drehung in Grad. Bleibt ueber Seitenwechsel erhalten. */
 	static float yaw = DEFAULT_YAW;
 	/**
-	 * Neigung in Grad: positiv = von oben, negativ = von unten. Begrenzt,
-	 * damit die Figur nicht kopfueber steht - von ganz oben oder unten
-	 * sieht man ohnehin nichts mehr.
+	 * Neigung in Grad: positiv = von oben, negativ = von unten. Von oben
+	 * geht es fast senkrecht (so sieht man Kopf und Schultern), von unten
+	 * weniger - da gibt es nur Schuhsohlen zu sehen.
 	 */
 	static float pitch = 0.0F;
-	private static final float PITCH_MIN = -50.0F;
-	private static final float PITCH_MAX = 70.0F;
+	private static final float PITCH_MIN = -45.0F;
+	private static final float PITCH_MAX = 85.0F;
 
 	private static boolean dragging;
 	private static int lastX;
@@ -124,8 +124,13 @@ final class Preview {
 	/** Wie hoch die Figur dabei sichtbar hochgeht. Weniger als echt, sonst passt sie nicht in die Karte. */
 	private static final float JUMP_SHOWN = 0.35F;
 
+	/** Treffer: Startzeit, oder -1. So lange blinkt die Figur rot - wie echt getroffen. */
+	private static long hitStart = -1L;
+	/** Wie lange Minecraft einen Treffer zeigt: 10 Ticks. */
+	private static final long HIT_MS = 500L;
+
 	/** Knoepfe unter der Figur - Lage aus dem letzten Bild, fuer den Klick. */
-	private static int runX, runY, runW, jumpX, jumpY, jumpW, buttonH;
+	private static int runX, runY, runW, jumpX, jumpY, jumpW, hitX, hitY, hitW, buttonH;
 
 	/** Breite der Spalte fuer eine Seite der Breite w, oder 0, wenn kein Platz ist. */
 	static int columnWidth(int w) {
@@ -148,6 +153,10 @@ final class Preview {
 			if (jumpStart < 0L) {
 				jumpStart = System.currentTimeMillis();
 			}
+			return;
+		}
+		if (buttonH > 0 && Draw.inside(mouseX, mouseY, hitX, hitY, hitW, buttonH)) {
+			hitStart = System.currentTimeMillis();
 			return;
 		}
 		if (buttonH > 0 && Draw.inside(mouseX, mouseY, armorX, armorY, armorW, buttonH)) {
@@ -177,6 +186,10 @@ final class Preview {
 	 * In jedem Bild: Ziehen weiterfuehren oder beenden. Seitwaerts dreht
 	 * die Figur, hoch und runter neigt sie - so sieht man sie von allen
 	 * Seiten, auch von oben und unten.
+	 *
+	 * Die Figur folgt der Maus wie ein Gegenstand, den man anfasst: nach
+	 * rechts ziehen dreht die Vorderseite nach rechts, nach unten ziehen
+	 * kippt sie nach vorne - dann sieht man sie von oben.
 	 */
 	static void updateDrag(int mouseX, int mouseY, boolean mouseDown) {
 		if (!dragging) {
@@ -186,7 +199,9 @@ final class Preview {
 			dragging = false;
 			return;
 		}
-		yaw += (mouseX - lastX) * 1.2F;
+		// bodyYaw waechst gegen den Uhrzeigersinn (von vorne gesehen nach
+		// links) - darum Minus, damit die Figur mit der Maus mitgeht.
+		yaw -= (mouseX - lastX) * 1.2F;
 		pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch + (mouseY - lastY) * 0.8F));
 		lastX = mouseX;
 		lastY = mouseY;
@@ -274,6 +289,19 @@ final class Preview {
 			}
 		}
 
+		// Treffer: der Zustand "getroffen" wie im Spiel - die Figur blinkt
+		// rot, und Mods, die darauf reagieren (Physik), sehen einen echten
+		// Treffer.
+		if (hitStart >= 0L) {
+			if (now - hitStart >= HIT_MS) {
+				hitStart = -1L;
+			} else {
+				if (state instanceof LivingEntityRenderState lv) {
+					lv.hurt = true;
+				}
+			}
+		}
+
 		// Oben der Hinweis, unten die Knoepfe.
 		int hintH = Ui.SMALL_H + 12;
 		int buttonsH = 18 * 2 + 6 + 16;
@@ -291,7 +319,10 @@ final class Preview {
 		float k = (b.x - a.x) / Math.max(1.0F, w);
 
 		Quaternionf rotation = new Quaternionf().rotateZ((float) Math.PI);
-		Quaternionf camera = new Quaternionf().rotateX((8.0F + pitch) * ((float) Math.PI / 180.0F));
+		// Positives rotateX kippt die Vorderseite nach oben (so schaut die
+		// Figur im Inventar zur Maus hoch) - man sieht sie dann von unten.
+		// Unser pitch zaehlt andersherum (positiv = von oben), darum Minus.
+		Quaternionf camera = new Quaternionf().rotateX(-pitch * ((float) Math.PI / 180.0F));
 		rotation.mul(camera);
 		// Die Figur steht etwas tiefer als mittig, damit oben Platz fuer
 		// den Sprung bleibt. Positives y schiebt sie nach unten.
@@ -322,10 +353,15 @@ final class Preview {
 		button(ctx, tr, jumpX, jumpY, jumpW, buttonH, mouseX, mouseY,
 			"lumilib.preview.jump", jumpStart >= 0L);
 
-		// Darunter, ueber die ganze Breite: Ruestung durchschalten.
-		armorX = runX;
-		armorY = by + buttonH + gap;
-		armorW = w - 16;
+		// Darunter: Treffer (ein Drittel) und Ruestung durchschalten (der Rest).
+		hitX = runX;
+		hitY = by + buttonH + gap;
+		hitW = (w - 16 - gap) / 3;
+		button(ctx, tr, hitX, hitY, hitW, buttonH, mouseX, mouseY,
+			"lumilib.preview.hit", hitStart >= 0L);
+		armorX = hitX + hitW + gap;
+		armorY = hitY;
+		armorW = w - 16 - hitW - gap;
 		String armorLabel = Text.translatable("lumilib.preview.armor",
 			Text.translatable(armor.key())).getString();
 		buttonText(ctx, tr, armorX, armorY, armorW, buttonH, mouseX, mouseY, armorLabel,

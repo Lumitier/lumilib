@@ -4,7 +4,8 @@
   "package": "com.lumitier.lumilib.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "ToastManagerMixin"
+    "ToastManagerMixin",
+    "TranslationStorageMixin"
   ],
   "injectors": {
     "defaultRequire": 1

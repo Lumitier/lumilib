@@ -152,6 +152,8 @@ public class LumiLibClient implements ClientModInitializer {
 					() -> LumiLib.cfg.menuButton,
 					v -> LumiLib.cfg.menuButton = v, true)
 			.section("appearance")
+				.choice("language", LangOverride.VALUES,
+					LangOverride::index, LangOverride::set, 0)
 				.toggle("dark_theme",
 					() -> LumiLib.cfg.darkTheme,
 					v -> {

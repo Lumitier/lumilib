@@ -84,6 +84,13 @@ public final class LumiLib {
 		 */
 		public java.util.List<String> pinned = new java.util.ArrayList<>();
 
+		/**
+		 * Sprache fuer LumiLib und die Mods darauf: "game" (wie Minecraft),
+		 * "en_us" oder "de_de". Der Rest des Spiels bleibt, wie er ist.
+		 * Siehe LangOverride.
+		 */
+		public String language = "game";
+
 		/** LumiLib-Knopf im Haupt- und Pausemenue. */
 		public boolean menuButton = true;
 

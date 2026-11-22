@@ -238,6 +238,31 @@ public final class SettingsPage {
 	                     BooleanSupplier getter, Consumer<Boolean> setter)
 		implements Row {}
 
+	/**
+	 * Eine von mehreren festen Moeglichkeiten (z. B. Sprache: Spiel /
+	 * English / Deutsch). Rechts steht die aktuelle, ein Klick nimmt die
+	 * naechste.
+	 *
+	 * Fuer zwei Moeglichkeiten gibt es Toggle, fuer Zahlen Slider - Choice
+	 * ist fuer alles dazwischen, wo die Werte Namen haben.
+	 */
+	public record Choice(Text label, @Nullable Text description, List<Text> options,
+	                     IntSupplier getter, IntConsumer setter)
+		implements Row {
+
+		/** Aktuelle Wahl, auf den gueltigen Bereich gebracht. */
+		public int index() {
+			int i = getter.getAsInt();
+			return i < 0 || i >= options.size() ? 0 : i;
+		}
+
+		/** Weiter (+1) oder zurueck (-1), am Ende wieder von vorn. */
+		public void step(int dir) {
+			int n = options.size();
+			setter.accept(((index() + dir) % n + n) % n);
+		}
+	}
+
 	/** Zeile, die beim Klick etwas tut. Kein Schalter, kein Wert. */
 	public record Action(Text label, @Nullable Text description, Runnable onClick)
 		implements Row {}
@@ -482,6 +507,25 @@ public final class SettingsPage {
 
 		public Builder toggle(String id, BooleanSupplier getter, Consumer<Boolean> setter) {
 			return row(new Toggle(label(id), description(id), getter, setter));
+		}
+
+		/**
+		 * Auswahl aus festen Moeglichkeiten. Die Namen stehen in der
+		 * Sprachdatei unter &lt;mod&gt;.option.&lt;id&gt;.&lt;wert&gt;.
+		 *
+		 * @param values  die Werte, z. B. {"game", "en_us", "de_de"}
+		 * @param getter  Index des aktuellen Werts in values
+		 * @param standard Index des Standardwerts
+		 */
+		public Builder choice(String id, String[] values, IntSupplier getter, IntConsumer setter,
+		                      int standard) {
+			List<Text> names = new ArrayList<>(values.length);
+			for (String v : values) {
+				names.add(Text.translatable(modId + ".option." + id + "." + v));
+			}
+			Choice c = new Choice(label(id), description(id), List.copyOf(names), getter, setter);
+			resets.put(c, new Reset(() -> setter.accept(standard), () -> getter.getAsInt() == standard));
+			return row(c);
 		}
 
 		public Builder action(String id, Runnable onClick) {

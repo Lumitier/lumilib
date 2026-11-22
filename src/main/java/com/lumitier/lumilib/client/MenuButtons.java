@@ -22,8 +22,16 @@ import java.util.List;
  * Der LumiLib-Knopf im Hauptmenue und im Pausemenue.
  *
  *  - Hauptmenue: eine breite Leiste UNTER "Options..." und "Quit Game".
- *  - Pausemenue: eine breite Leiste direkt UNTER "Back to Game", alles
- *    darunter rutscht eine Zeile nach unten.
+ *  - Pausemenue: ein kleiner Symbol-Knopf LINKS neben "Back to Game"
+ *    (ist dort schon etwas, rechts daneben). Nichts wird verschoben.
+ *
+ * WARUM IM PAUSEMENUE NICHTS MEHR VERSCHOBEN WIRD: Frueher rutschte alles
+ * unter "Back to Game" eine Zeile nach unten, um Platz fuer eine breite
+ * Leiste zu machen. Mit vielen Mods, die selbst Knoepfe ins Pausemenue
+ * setzen oder es umbauen (FancyMenu, Essential, Flashback ...), landete
+ * "Disconnect" dabei unter einem fremden Knopf oder unter dem Bildrand -
+ * er war nicht mehr zu sehen. Ein Knopf neben "Back to Game" braucht
+ * keinen Platz von anderen.
  *
  * OHNE MIXIN: Fabrics Screen-API meldet, wenn ein Bildschirm aufgebaut ist,
  * und gibt die Liste seiner Knoepfe heraus. Gesucht wird ueber die
@@ -75,7 +83,10 @@ public final class MenuButtons {
 		int x = Math.min(options.getX(), quit.getX());
 		int right = Math.max(options.getRight(), quit.getRight());
 		int y = Math.max(options.getY(), quit.getY()) + ROW;
-		buttons.add(new LumiButton(x, y, right - x, screen));
+		// Hat ein anderer Mod dort schon etwas hingesetzt: nicht darueber.
+		if (free(buttons, x, y, right - x) && y + 20 <= screen.height) {
+			buttons.add(new LumiButton(x, y, right - x, screen));
+		}
 	}
 
 	private static void addToPause(Screen screen) {
@@ -84,13 +95,36 @@ public final class MenuButtons {
 		if (back == null) {
 			return;
 		}
-		// Alles unter "Back to Game" eine Zeile nach unten.
+		int y = back.getY();
+		int left = back.getX() - GAP_SIDE - SQUARE;
+		int right = back.getRight() + GAP_SIDE;
+		// Links bevorzugt - rechts steht bei manchen Mods schon etwas
+		// (Mod Menu setzt dort z. B. sein Symbol, wenn so eingestellt).
+		if (left >= 0 && free(buttons, left, y, SQUARE)) {
+			buttons.add(new LumiButton(left, y, SQUARE, screen));
+		} else if (right + SQUARE <= screen.width && free(buttons, right, y, SQUARE)) {
+			buttons.add(new LumiButton(right, y, SQUARE, screen));
+		}
+		// Beides belegt: lieber kein Knopf als einer, der etwas verdeckt.
+		// Der Hub ist weiter ueber die Taste (L) erreichbar.
+	}
+
+	private static final int SQUARE = 20;
+	private static final int GAP_SIDE = 4;
+
+	/** Liegt an dieser Stelle (w breit, 20 hoch) noch kein anderer Knopf? */
+	private static boolean free(List<ClickableWidget> buttons, int x, int y, int w) {
 		for (ClickableWidget b : buttons) {
-			if (b.getY() > back.getY()) {
-				b.setY(b.getY() + ROW);
+			if (!b.visible) {
+				continue;
+			}
+			boolean overlapX = x < b.getRight() && x + w > b.getX();
+			boolean overlapY = y < b.getBottom() && y + SQUARE > b.getY();
+			if (overlapX && overlapY) {
+				return false;
 			}
 		}
-		buttons.add(new LumiButton(back.getX(), back.getY() + ROW, back.getWidth(), screen));
+		return true;
 	}
 
 	private static ClickableWidget find(List<ClickableWidget> buttons, String key) {
@@ -122,6 +156,15 @@ public final class MenuButtons {
 			super(x, y, width, 20, net.minecraft.text.Text.literal("LumiLib"),
 				b -> MinecraftClient.getInstance().setScreen(new LumiHubScreen(parent)),
 				DEFAULT_NARRATION_SUPPLIER);
+			if (iconOnly()) {
+				// Ohne Beschriftung sagt der Hinweis beim Draufzeigen, was es ist.
+				setTooltip(net.minecraft.client.gui.tooltip.Tooltip.of(net.minecraft.text.Text.literal("LumiLib")));
+			}
+		}
+
+		/** Zu schmal fuer Schrift: nur das Symbol, mittig. */
+		private boolean iconOnly() {
+			return getWidth() < 40;
 		}
 
 		@Override
@@ -147,6 +190,13 @@ public final class MenuButtons {
 			a = Math.min(255, a);
 			drawButton(ctx);
 
+			if (iconOnly()) {
+				ctx.drawTexture(RenderPipelines.GUI_TEXTURED, ICON, getX() + (getWidth() - ICON_SIZE) / 2,
+					getY() + (getHeight() - ICON_SIZE) / 2, 0.0F, 0.0F,
+					ICON_SIZE, ICON_SIZE, 16, 16, 16, 16,
+					(a << 24) | 0xFFFFFF);
+				return;
+			}
 			TextRenderer tr = MinecraftClient.getInstance().textRenderer;
 			int tw = tr.getWidth(getMessage());
 			int x0 = getX() + (getWidth() - (tw + GAP + ICON_SIZE)) / 2;

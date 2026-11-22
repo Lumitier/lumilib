@@ -607,6 +607,8 @@ final class SettingsList {
 			drawSlider(ctx, tr, sl, y, h, right);
 		} else if (row instanceof SettingsPage.Colour c) {
 			drawSwatch(ctx, tr, c, y, h, right);
+		} else if (row instanceof SettingsPage.Choice ch) {
+			drawChoice(ctx, tr, ch, y, h, right, hover);
 		}
 
 		if (effective(page).canReset(row)) {
@@ -739,6 +741,32 @@ final class SettingsList {
 	 * halb durchsichtige Farbe genauso aus wie eine helle deckende -
 	 * und gerade die Deckkraft will man hier einstellen koennen.
 	 */
+	/** Breite des Auswahlfelds rechts. Passt "Game language" in kleiner Schrift. */
+	private static final int CHOICE_W = 96;
+
+	/**
+	 * Auswahlfeld: Rahmen wie ein Eingabefeld, darin der aktuelle Wert,
+	 * links und rechts kleine Pfeile - sie sagen, dass ein Klick weiterblaettert.
+	 */
+	private static void drawChoice(DrawContext ctx, TextRenderer tr, SettingsPage.Choice c,
+	                               int y, int h, int right, boolean hover) {
+		int bh = Metrics.SWATCH_H + 4;
+		int bx = right - CHOICE_W;
+		int by = y + (h - bh) / 2;
+		Draw.roundedRect(ctx, bx, by, CHOICE_W, bh, 4, hover ? Theme.ROW_HOVER : Theme.ROW_SELECTED);
+		Draw.roundedOutline(ctx, bx, by, CHOICE_W, bh, 4, Theme.FIELD_EDGE);
+		String text = Ui.fitSmall(tr, c.options().get(c.index()).getString(), CHOICE_W - 24);
+		int tw = Ui.widthSmall(tr, text);
+		Ui.drawCenteredIn(ctx, tr, Ui.small(text), bx + (CHOICE_W - tw) / 2, by, bh,
+			Ui.SMALL_H, Ui.SMALL_D, Ui.TOP_SMALL, Theme.TEXT);
+		// Pfeile aus Linien, 3 Pixel hoch - wie die Pfeile der Kategorien.
+		int cy = by + bh / 2;
+		for (int i = 0; i < 3; i++) {
+			ctx.fill(bx + 6 + i, cy - i, bx + 7 + i, cy + i + 1, Theme.TEXT_MUTED);
+			ctx.fill(bx + CHOICE_W - 7 - i, cy - i, bx + CHOICE_W - 6 - i, cy + i + 1, Theme.TEXT_MUTED);
+		}
+	}
+
 	private static void drawSwatch(DrawContext ctx, TextRenderer tr,
 	                               SettingsPage.Colour c, int y, int h, int right) {
 		int argb = c.getter().getAsInt();
@@ -782,6 +810,9 @@ final class SettingsList {
 		}
 		if (row instanceof SettingsPage.Colour) {
 			return Metrics.SWATCH_W + Metrics.HEX_W + 14 + extra;
+		}
+		if (row instanceof SettingsPage.Choice) {
+			return CHOICE_W + 12 + extra;
 		}
 		// Hinweis- und Aktionszeilen haben kein Bedienelement, aber der
 		// Knopf steht trotzdem da, wenn sie einen Standardwert haben.
@@ -965,6 +996,8 @@ final class SettingsList {
 			t.setter().accept(!t.getter().getAsBoolean());
 		} else if (h.row() instanceof SettingsPage.Action a) {
 			a.onClick().run();
+		} else if (h.row() instanceof SettingsPage.Choice ch) {
+			ch.step(1);
 		} else if (h.row() instanceof SettingsPage.Slider s) {
 			setFromMouse(s, h, mx);
 		} else if (h.row() instanceof SettingsPage.ListRow l) {
