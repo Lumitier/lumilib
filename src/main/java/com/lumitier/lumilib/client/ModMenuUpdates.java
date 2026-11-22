@@ -44,11 +44,14 @@ final class ModMenuUpdates {
 
 	private ModMenuUpdates() {}
 
-	/** Anzahl der Mods mit verfuegbarem Update. */
+	/**
+	 * Anzahl der Lumitier-Mods mit verfuegbarem Update. Fremde Mods zaehlen
+	 * nicht - fuer die gibt es Mod Menu, der Hub ist fuer diese Mods da.
+	 */
 	static int count() {
 		int n = 0;
 		for (Mod mod : ModMenu.ROOT_MODS.values()) {
-			if (mod.hasUpdate() || mod.getChildHasUpdate()) {
+			if (isLumitier(mod.getId()) && (mod.hasUpdate() || mod.getChildHasUpdate())) {
 				n++;
 			}
 		}
@@ -67,7 +70,7 @@ final class ModMenuUpdates {
 	            String channel, String link) {}
 
 	/**
-	 * Alle Mods mit Update, Lumitier-Mods zuerst, dann alphabetisch.
+	 * Alle Lumitier-Mods mit Update, alphabetisch.
 	 *
 	 * Neu gebaut bei jedem Aufruf - der Hub ruft das hoechstens alle zwei
 	 * Sekunden auf, nicht in jedem Bild.
@@ -75,25 +78,20 @@ final class ModMenuUpdates {
 	static List<Item> list() {
 		List<Item> out = new ArrayList<>();
 		for (Mod mod : ModMenu.ROOT_MODS.values()) {
-			if (!mod.hasUpdate() && !mod.getChildHasUpdate()) {
+			if (!isLumitier(mod.getId()) || (!mod.hasUpdate() && !mod.getChildHasUpdate())) {
 				continue;
 			}
 			UpdateInfo info = mod.getUpdateInfo();
 			String latest = info instanceof ModrinthUpdateInfo m && m.versionNumber() != null
 				? m.versionNumber() : "";
 			UpdateChannel ch = info == null ? null : info.getUpdateChannel();
-			String link = info == null || info.getDownloadLink() == null ? "" : info.getDownloadLink();
+			// Installieren fuehrt auf die Mod-Seite der Website: Dort stehen
+			// die Anforderungen und der richtige Download.
+			String link = "https://lumitier.dev/mods/" + mod.getId();
 			out.add(new Item(mod.getId(), mod.getTranslatedName(), mod.getVersion(), latest,
 				ch == null ? "RELEASE" : ch.name(), link));
 		}
-		out.sort((a, b) -> {
-			boolean la = isLumitier(a.id());
-			boolean lb = isLumitier(b.id());
-			if (la != lb) {
-				return la ? -1 : 1;
-			}
-			return a.name().compareToIgnoreCase(b.name());
-		});
+		out.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
 		return out;
 	}
 

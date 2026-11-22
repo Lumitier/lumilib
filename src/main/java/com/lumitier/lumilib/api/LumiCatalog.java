@@ -46,30 +46,33 @@ public final class LumiCatalog {
 	 * fabric.mod.json entsprechen. Ein Tippfehler zeigt eine installierte
 	 * Mod als "nicht installiert" an.
 	 */
+	// Links fuehren auf die eigene Website, nicht auf Modrinth: Dort steht
+	// jede Mod mit Anforderungen und Download, auch solange sie auf
+	// Modrinth noch nicht oeffentlich ist.
 	public static final List<Entry> KNOWN = List.of(
 		// Zuerst das Fundament: LumiLib selbst und das Gegenstueck, mit
 		// dem ein Server einzelne Mods abschalten kann. Von beiden haengt
 		// ab, ob der Rest ueberhaupt laeuft.
 		new Entry("lumilib", "LumiLib",
-			"https://modrinth.com/mod/lumilib"),
+			"https://lumitier.dev/mods/lumilib"),
 		new Entry("lumilibcontrol", "LumiLibControl",
-			"https://modrinth.com/mod/lumilibcontrol"),
+			"https://lumitier.dev/mods/lumilibcontrol"),
 
 		// Dann die Werkzeuge.
 		new Entry("resourcepackstudio", "Resource Pack Studio",
-			"https://modrinth.com/mod/resource-pack-studio"),
+			"https://lumitier.dev/mods/resourcepackstudio"),
 		new Entry("ipaddresshider", "IP Address Hider",
-			"https://modrinth.com/mod/ip-address-hider"),
+			"https://lumitier.dev/mods/ipaddresshider"),
 
 		// Dann die Mods, die am Aussehen des Spiels drehen.
 		new Entry("perpetualsnow", "Perpetual Snow",
-			"https://modrinth.com/mod/perpetual-snow"),
+			"https://lumitier.dev/mods/perpetualsnow"),
 		new Entry("shadowtweaks", "Shadow Tweaks",
-			"https://modrinth.com/mod/shadow-tweaks"),
+			"https://lumitier.dev/mods/shadowtweaks"),
 		new Entry("itemdroptweaks", "Item Drop Tweaks",
-			"https://modrinth.com/mod/item-drop-tweaks"),
+			"https://lumitier.dev/mods/itemdroptweaks"),
 		new Entry("xporbtweaks", "Experience Orb Tweaks",
-			"https://modrinth.com/mod/experience-orb-tweaks")
+			"https://lumitier.dev/mods/xporbtweaks")
 	);
 
 	/**

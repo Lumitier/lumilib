@@ -64,6 +64,13 @@ final class MenuPlayer {
 		s.nameLabelPos = null;
 		// Laufende Zeit in Ticks - davon haengt das leichte Armschwingen ab.
 		s.age = (System.currentTimeMillis() % 1_000_000L) / 50.0F;
+		// Derselbe Zustand wird jedes Bild wiederverwendet. Was die Vorschau
+		// fuer einen Moment setzt (Treffer, Sprung, Laufen), muss hier
+		// zurueck - sonst blinkt die Figur nach einem Treffer fuer immer rot.
+		s.hurt = false;
+		s.y = 0.0;
+		s.limbSwingAmplitude = 0.0F;
+		s.limbSwingAnimationProgress = 0.0F;
 
 		// Die Skin-Ebenen: bei einem selbst so, wie man sie in den Optionen
 		// eingestellt hat. Bei anderen weiss man es nicht - dann alle an,

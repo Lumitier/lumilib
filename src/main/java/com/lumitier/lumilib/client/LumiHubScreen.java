@@ -847,7 +847,9 @@ public class LumiHubScreen extends ScaledScreen implements LumiScreen {
 			// Abstandsfunktion wie die Flaechen. Ein 4 Pixel grosses PNG
 			// war bei GUI-Skalierung 3 ein Quadrat mit abgeschnittenen
 			// Ecken, kein Punkt.
-			Draw.dot(ctx, x + w - 2, y + 3 + Ui.BODY_H / 2, 2, Theme.OK);
+			// Mitte der Kleinbuchstaben, nicht der Versalhoehe - die Zeile
+			// besteht fast nur aus Kleinbuchstaben, daran misst das Auge.
+			Draw.dot(ctx, x + w - 3, y + 3 + Ui.BODY_H - 3, 2, Theme.OK);
 		}
 
 		y += Metrics.ROW_H + 4;
