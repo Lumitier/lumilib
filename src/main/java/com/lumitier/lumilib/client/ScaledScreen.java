@@ -35,6 +35,15 @@ public abstract class ScaledScreen extends Screen {
 	public static final int DESIGN_W = 960;
 	public static final int DESIGN_H = 540;
 
+	/** Kleinste Flaeche in eigenen Pixeln, auf der der Hub noch Platz hat. */
+	private static final int MIN_W = 640;
+	private static final int MIN_H = 360;
+
+	/** Neu ausmessen - nach einer Aenderung der GUI-Groesse. */
+	public void rescale() {
+		clearAndInit();
+	}
+
 	private float scale = 1.0F;
 	private int realWidth;
 	private int realHeight;
@@ -81,16 +90,30 @@ public abstract class ScaledScreen extends Screen {
 		// Wie viele Bildschirmpixel ein eigener Pixel bekommt. 1080p -> 2,
 		// 1440p -> 2,67, 4K -> 4. Nie unter 1, sonst wird es unscharf
 		// kleiner als Minecraft selbst zeichnen kann.
-		float target = Math.min(win.getFramebufferWidth() / (float) DESIGN_W,
-			win.getFramebufferHeight() / (float) DESIGN_H);
-		// Knapp daneben zaehlt als ganze Zahl: Ein Fenster mit Titelleiste
-		// hat 1017 statt 1080 Pixel Hoehe - dafuer soll nicht alles um 6 %
-		// schrumpfen und unscharf werden.
-		float rounded = Math.round(target);
-		if (rounded >= 1.0F && Math.abs(target - rounded) < 0.15F) {
-			target = rounded;
+		int fbW = win.getFramebufferWidth();
+		int fbH = win.getFramebufferHeight();
+		float target;
+		int fixed = com.lumitier.lumilib.LumiLib.cfg.guiScale;
+		if (fixed > 0) {
+			// FESTE STUFE, wie GUI 1 bis 4 in Minecraft - aber nur fuer
+			// LumiLib, egal was in Minecrafts Optionen steht. Nie groesser,
+			// als das Fenster hergibt: Unter 640x360 eigenen Pixeln passt
+			// der Hub nicht mehr hinein, dann gilt die naechstkleinere Stufe.
+			int fits = (int) Math.floor(Math.min(fbW / (float) MIN_W, fbH / (float) MIN_H));
+			target = Math.max(1, Math.min(fixed, fits));
+		} else {
+			// AUTOMATISCH: so gross, dass die Entwurfsflaeche das Fenster
+			// fuellt - das Verhalten bis 2.2.
+			target = Math.min(fbW / (float) DESIGN_W, fbH / (float) DESIGN_H);
+			// Knapp daneben zaehlt als ganze Zahl: Ein Fenster mit Titelleiste
+			// hat 1017 statt 1080 Pixel Hoehe - dafuer soll nicht alles um 6 %
+			// schrumpfen und unscharf werden.
+			float rounded = Math.round(target);
+			if (rounded >= 1.0F && Math.abs(target - rounded) < 0.15F) {
+				target = rounded;
+			}
+			target = Math.max(1.0F, target);
 		}
-		target = Math.max(1.0F, target);
 
 		int gui = Math.max(1, win.getScaleFactor());
 		this.scale = target / gui;

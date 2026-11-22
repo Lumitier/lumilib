@@ -80,7 +80,7 @@ public final class SearchField {
 		// nicht, dass es ein Suchfeld ist. Bei Walksy ist sie durchgehend
 		// kraeftig, und das ist der Grund dafuer.
 		Surface.icon(ctx, Identifier.of(MOD_ID, "search"),
-			x + 7, mid - icon / 2, icon, Theme.TEXT);
+			x + 7, mid - icon / 2, icon, focused ? Theme.TOGGLE_ON : Theme.TEXT);
 
 		int tx = x + 7 + icon + 5;
 		int room = x + w - 7 - tx;
@@ -101,7 +101,7 @@ public final class SearchField {
 		if (focused && (System.currentTimeMillis() / 500) % 2 == 0) {
 			int cx = tx + Ui.width(tr, shown.substring(0, Math.min(cursor, shown.length())));
 			Draw.vLine(ctx, Math.min(cx, x + w - 8),
-				mid - (Ui.BODY_H + Ui.BODY_D) / 2, Ui.BODY_H + Ui.BODY_D, Theme.TEXT);
+				mid - (Ui.BODY_H + Ui.BODY_D) / 2, Ui.BODY_H + Ui.BODY_D, Theme.TOGGLE_ON);
 		}
 	}
 

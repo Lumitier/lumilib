@@ -98,8 +98,35 @@ public final class Theme {
 			case DARK -> dark();
 			case LIGHT -> light();
 		}
+		applyAccent();
 		com.lumitier.lumilib.client.gpu.Sdf.paletteChanged();
 		return true;
+	}
+
+	/** 0 = Akzent der Palette, sonst 0xRRGGBB. */
+	private static int accentOverride;
+
+	/**
+	 * Akzentfarbe setzen, 0 nimmt wieder den der Palette.
+	 *
+	 * Gilt fuer Schalter, Regler und die gewaehlte Zeile - und in jeder
+	 * Mod, die Theme.TOGGLE_ON liest. Steht nicht im Shader, also muss
+	 * nichts neu gebaut werden.
+	 */
+	public static void setAccent(int rgb) {
+		accentOverride = rgb == 0 ? 0 : (0xFF000000 | rgb);
+		applyAccent();
+	}
+
+	/** Der Akzent der Palette, bevor jemand etwas gewaehlt hat. */
+	public static int defaultAccent() {
+		return variant == Variant.DARK ? 0xFF2B4BFF : 0xFF0084E8;
+	}
+
+	private static void applyAccent() {
+		int a = accentOverride != 0 ? accentOverride : defaultAccent();
+		TOGGLE_ON = a;
+		ACCENT_SOFT = (0x2A << 24) | (a & 0x00FFFFFF);
 	}
 
 
@@ -160,8 +187,12 @@ public final class Theme {
 	public static int OK;
 	public static int NEUTRAL;
 
+	/** Der Akzent, schwach - als Hauch ueber der gewaehlten Zeile. */
+	public static int ACCENT_SOFT;
+
 	static {
 		dark();
+		applyAccent();
 	}
 
 
@@ -196,15 +227,18 @@ public final class Theme {
 		LENS_CARD = 0x0AFFFFFF;
 		REFRACT = 44.0F;
 		THICK = 40.0F;
-		BLUR = 11.0F;
-		DISPERSE = 0.05F;
+		// Etwas glasiger als 2.2.0: duennere Toenung, mehr Farbe von
+		// hinten, etwas weicher. Schrift bleibt lesbar, weil das Tonband
+		// die Helligkeit weiter begrenzt.
+		BLUR = 14.0F;
+		DISPERSE = 0.06F;
 		FRESNEL = 16.0F;
 		FRESNEL_H = 4.0F;
-		FRESNEL_A = 0x2EFFFFFF;
-		GLASS_TINT = 0xA511171C;
-		TONE_FLOOR = 0.03F;
-		TONE_CEIL = 0.22F;
-		SATURATION = 0.30F;
+		FRESNEL_A = 0x38FFFFFF;
+		GLASS_TINT = 0x9611171C;
+		TONE_FLOOR = 0.04F;
+		TONE_CEIL = 0.26F;
+		SATURATION = 0.42F;
 		DENS = 0.30F;
 		DENS_CARD = 0.15F;
 		EDGE_STRONG = 0x66000000;

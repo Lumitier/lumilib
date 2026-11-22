@@ -160,6 +160,22 @@ public class LumiLibClient implements ClientModInitializer {
 						LumiLib.cfg.darkTheme = v;
 						applyTheme();
 					}, true)
+				.choice("accent", Accent.keys(),
+					() -> LumiLib.cfg.accentPreset,
+					v -> {
+						LumiLib.cfg.accentPreset = v;
+						Accent.apply();
+					}, 0)
+				.choice("gui_scale", GUI_SCALES,
+					() -> Math.max(0, Math.min(4, LumiLib.cfg.guiScale)),
+					v -> {
+						LumiLib.cfg.guiScale = v;
+						// Sofort umsetzen, nicht erst beim naechsten Oeffnen -
+						// sonst klickt man und sieht nichts passieren.
+						if (MinecraftClient.getInstance().currentScreen instanceof ScaledScreen s) {
+							s.rescale();
+						}
+					}, 2)
 				.toggle("animations",
 					() -> LumiLib.cfg.animations,
 					v -> LumiLib.cfg.animations = v, true)
@@ -186,8 +202,12 @@ public class LumiLibClient implements ClientModInitializer {
 	 * daran. Zwei Aufrufstellen, die auseinanderlaufen, waeren ein
 	 * Fehlerbild, das man erst nach dem Neustart sieht.
 	 */
+	/** Werte der GUI-Groesse: Index = gespeicherte Zahl, 0 ist automatisch. */
+	private static final String[] GUI_SCALES = {"auto", "1", "2", "3", "4"};
+
 	private static void applyTheme() {
 		Theme.apply(LumiLib.cfg.darkTheme ? Theme.Variant.DARK : Theme.Variant.LIGHT);
+		Accent.apply();
 	}
 
 	/**

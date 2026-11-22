@@ -469,6 +469,9 @@ public class LumiHubScreen extends ScaledScreen implements LumiScreen {
 		boolean hover = Draw.inside(mouseX, mouseY, x - 4, y, w + 8, Metrics.ROW_H);
 		if (selected) {
 			Surface.row(ctx, x - 4, y, w + 8, Metrics.ROW_H, Theme.ROW_SELECTED);
+			// Ein Hauch Akzent ueber der Auswahl - dieselbe Farbe wie die
+			// Schalter rechts.
+			Surface.row(ctx, x - 4, y, w + 8, Metrics.ROW_H, Theme.ACCENT_SOFT);
 		} else if (hoverAmt > 0.01F) {
 			// Blendet ein und aus statt umzuschalten. Faehrt man schnell
 			// ueber die Liste, zieht ein kurzer Schweif mit - so sieht man,
@@ -822,6 +825,7 @@ public class LumiHubScreen extends ScaledScreen implements LumiScreen {
 			this.frameDt, Anim.HOVER_MS);
 		if (this.showUpdates) {
 			Surface.row(ctx, x - 4, y, w + 8, Metrics.ROW_H, Theme.ROW_SELECTED);
+			Surface.row(ctx, x - 4, y, w + 8, Metrics.ROW_H, Theme.ACCENT_SOFT);
 		} else if (this.updatesHover > 0.01F) {
 			Surface.row(ctx, x - 4, y, w + 8, Metrics.ROW_H,
 				Anim.alpha(Theme.ROW_HOVER, this.updatesHover));

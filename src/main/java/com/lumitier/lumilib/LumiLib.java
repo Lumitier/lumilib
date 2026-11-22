@@ -114,6 +114,19 @@ public final class LumiLib {
 		 * Katalogs.
 		 */
 		public java.util.List<String> order = new java.util.ArrayList<>();
+
+		/** Akzentfarbe: Index in client.Accent.PRESETS, 0 = Standard der Palette. */
+		public int accentPreset = 0;
+
+		/**
+		 * GUI-Stufe fuer alle Bildschirme von LumiLib, unabhaengig von der
+		 * in Minecrafts Optionen. 0 = automatisch (an die Fenstergroesse
+		 * angepasst, das alte Verhalten), 1 bis 4 = feste Stufe.
+		 *
+		 * Standard 2: So ist der Hub gestaltet, und so sieht er auf jedem
+		 * Bildschirm gleich gross aus, egal was im Spiel eingestellt ist.
+		 */
+		public int guiScale = 2;
 	}
 
 	public static volatile Config cfg = new Config();
